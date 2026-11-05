@@ -1,0 +1,83 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: PHP ${{ matrix.php }} / Symfony ${{ matrix.symfony }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+        symfony: ['locked', '7.4', '8.1']
+    env:
+      COMPOSER_ROOT_VERSION: 0.1.0-beta.1
+      MODERNORM_TEST_URL: postgresql://postgres:postgres@127.0.0.1:5432/modernorm_test
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: modernorm_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout bundle
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_pgsql, ctype, iconv, mbstring, dom, xml, xmlwriter
+          tools: composer:v2
+          coverage: none
+
+      - name: Validate Composer manifest and lock
+        run: composer validate --strict
+
+      - name: Install locked dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Select Symfony release line
+        if: matrix.symfony != 'locked'
+        env:
+          SYMFONY_VERSION: ${{ matrix.symfony }}
+        run: |
+          php tools/ci/select-symfony.php
+          composer update 'symfony/*' --with-all-dependencies --no-interaction --prefer-dist --no-progress
+          composer validate --strict
+
+      - name: Check installed platform requirements
+        run: composer check-platform-reqs
+
+      - name: Unit and PostgreSQL integration tests
+        run: composer test -- --fail-on-skipped
+
+      - name: Migrations and fixtures from an empty schema
+        run: php examples/migrations-fixtures/run.php
+
+      - name: Install production dependencies only
+        run: composer install --no-dev --no-interaction --prefer-dist --no-progress
+
+      - name: Runtime without optional development packages
+        run: php tests/Smoke/runtime.php
