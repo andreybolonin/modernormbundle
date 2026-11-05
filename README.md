@@ -12,7 +12,7 @@ Connect your EntityManager, attribute mappings, batch fetching, PSR-6 caches and
 
 ## Installation
 
-Standard installation requires Packagist registration of both packages. GitHub beta tags are available independently of that registry step.
+Both packages are available on Packagist as `v0.1.0-beta.1`.
 
 The beta requires explicit stability flags for both packages in the application's root manifest:
 
@@ -20,7 +20,7 @@ The beta requires explicit stability flags for both packages in the application'
 composer require 'andreybolonin/modernorm:^0.1@beta' 'andreybolonin/modernorm-bundle:^0.1@beta'
 ```
 
-For bundle development, clone this repository and run `composer install` followed by `composer test`. The core is resolved from its public GitHub beta tag through Composer; a sibling checkout is not required. The root-only public VCS repository bootstraps development/CI until Packagist registration is complete and can then be removed. Composer does not inherit repositories from dependencies, so ordinary application installation requires both packages in Packagist or explicit root VCS repositories. Joint development can use a separate local Composer manifest with a path repository.
+For bundle development, clone this repository and run `composer install` followed by `composer test`. The core is resolved from Packagist through Composer; a sibling checkout or custom repository is not required. Joint development can use a separate local Composer manifest with a path repository.
 
 Register the bundle in `config/bundles.php`:
 
@@ -166,7 +166,7 @@ One default PostgreSQL ORM connection and EntityManager, attribute mapping, nati
 
 ## Validation
 
-GitHub Actions runs PHP 8.4/8.5 against locked dependencies and Symfony 7.4/8.1 with PostgreSQL 17. The core is installed from its public beta tag through Composer, using the VCS bootstrap while registry setup is pending. Integration tests fail if skipped, the migration/fixture example runs, and a final smoke test boots the bundle after `composer install --no-dev`, without Twig, WebProfiler, Doctrine ORM or the optional migration/fixture libraries.
+GitHub Actions runs PHP 8.4/8.5 against locked dependencies and Symfony 7.4/8.1 with PostgreSQL 17. The core is installed from Packagist through Composer. Integration tests fail if skipped, the migration/fixture example runs, and a final smoke test boots the bundle after `composer install --no-dev`, without Twig, WebProfiler, Doctrine ORM or the optional migration/fixture libraries.
 
 Run `composer test` for functional kernel, persisted profile, Twig rendering, console, subrequest, observer and worker-reset checks. To include PostgreSQL connection and transaction cleanup checks:
 

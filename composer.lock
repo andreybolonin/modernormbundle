@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8255e727ca11c7a638bd843af9dfcd03",
+    "content-hash": "63f843a083e6ea3a3c0caacd5759020b",
     "packages": [
         {
             "name": "andreybolonin/modernorm",

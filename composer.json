@@ -73,11 +73,5 @@
             "/.env",
             "/.env.*"
         ]
-    },
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/andreybolonin/modernorm"
-        }
-    ]
+    }
 }
