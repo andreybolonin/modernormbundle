@@ -81,8 +81,10 @@ final class ModernORMExtension extends Extension
         $container->register('modernorm.request_listener', RequestListener::class)
             ->setArguments([$ref('modernorm.statistics'), $ref('modernorm.cache_logger'), $ref('modernorm.profiler.history'), $ref('modernorm.profiler.sql_history')])->addTag('kernel.event_subscriber');
         if ($config['profiler']['enabled']) {
+            $container->register('modernorm.profiler.advisor', \ModernORM\Bundle\Profiler\PerformanceAdvisor::class)
+                ->setArguments([$config['profiler']['advisor']]);
             $container->register('modernorm.profiler.collector', DataCollector::class)
-                ->setArguments([$ref('modernorm.statistics'), $ref('modernorm.cache_logger'), $ref('modernorm.profiler.history'), $config['l2_cache']['pool'] !== null, $ref('modernorm.profiler.sql_history')])
+                ->setArguments([$ref('modernorm.statistics'), $ref('modernorm.cache_logger'), $ref('modernorm.profiler.history'), $config['l2_cache']['pool'] !== null, $ref('modernorm.profiler.sql_history'), $ref('modernorm.profiler.advisor'), $container->getParameter('kernel.environment'), $config['server_version'] === null ? null : (string) $config['server_version'], $config['profiler']['advisor']['enabled']])
                 ->addTag('data_collector', ['id' => 'modernorm', 'template' => '@ModernORM/Collector/modernorm.html.twig', 'priority' => 250]);
         }
     }

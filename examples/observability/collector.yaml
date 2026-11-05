@@ -1,0 +1,32 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 128
+    spike_limit_mib: 32
+  delta_to_cumulative:
+    max_stale: 10m
+    max_streams: 50000
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    resource_constant_labels:
+      included: [service.name, service.instance.id, deployment.environment.name, modernorm.runtime]
+  prometheus_remote_write:
+    http:
+      endpoint: http://victoriametrics:8428/api/v1/write
+    resource_constant_labels:
+      included: [service.name, service.instance.id, deployment.environment.name, modernorm.runtime]
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, delta_to_cumulative, batch]
+      exporters: [prometheus, prometheus_remote_write]

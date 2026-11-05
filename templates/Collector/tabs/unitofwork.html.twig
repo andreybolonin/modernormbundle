@@ -1,0 +1,22 @@
+{% import '@ModernORM/Collector/_macros.html.twig' as ui %}
+<h3>UnitOfWork</h3>
+{% if metrics.unitOfWork is null %}{{ ui.unavailable('UnitOfWork phases') }}{% else %}
+    {% set work = metrics.unitOfWork %}
+    <div class="morm-metrics morm-four">
+        {{ ui.metric('Observed managed entities', work.observedManagedMax, '', 'rows') }}
+        {{ ui.metric('Change-set calculation', work.phases.change_sets.timeMs|number_format(3), 'ms', 'clock') }}
+        {{ ui.metric('Write phase', work.phases.writes.timeMs|number_format(3), 'ms', 'database') }}
+        {{ ui.metric('Commit phase', work.phases.commit.timeMs|number_format(3), 'ms', 'clock') }}
+    </div>
+    <div class="morm-columns">
+        <div class="morm-box"><h4>Flush phases</h4><table><thead><tr><th>Phase</th><th class="morm-num">Attempts</th><th class="morm-num">Time (ms)</th><th class="morm-num">Errors</th></tr></thead><tbody>
+            {% for key, label in {change_sets: 'Calculate change sets', writes: 'Execute writes', commit: 'DBAL commit'} %}{% set phase = work.phases[key] %}<tr><td>{{ label }}</td><td class="morm-num">{{ phase.count }}</td><td class="morm-num">{{ phase.timeMs|number_format(3) }}</td><td class="morm-num">{{ phase.errors }}</td></tr>{% endfor %}
+        </tbody></table><p class="morm-note">An empty flush has no write/commit phase. Successful commit can be a savepoint release in a caller-owned transaction; it does not always mean final commit.</p></div>
+        <div class="morm-box"><h4>Last planned write set</h4><dl class="morm-dl">
+            {% for key, label in {insertions: 'Entity insertions', updates: 'Entity updates', deletions: 'Entity deletions', collectionUpdates: 'Collection updates', collectionDeletions: 'Collection deletions', extraUpdates: 'Extra updates'} %}<dt>{{ label }}</dt><dd>{{ work.lastWrites[key] ?? '—' }}</dd>{% endfor %}
+        </dl><p class="morm-note">Scheduled operations at the last write-phase boundary, not executed SQL row totals. Entity identifiers and individual DML timings are not recorded.</p></div>
+    </div>
+    <div class="morm-box"><h4>Retained phase events</h4><div class="morm-table"><table><thead><tr><th>Phase</th><th class="morm-num">Managed</th><th class="morm-num">Planned I / U / D</th><th class="morm-num">Collections U / D</th><th class="morm-num">Time (ms)</th><th>Result</th></tr></thead><tbody>
+        {% for event in collector.eventRows('unit_of_work') %}{% if event.unitOfWork %}<tr><td>{{ event.unitOfWork.phase }}</td><td class="morm-num">{{ event.unitOfWork.managedEntities }}</td><td class="morm-num">{{ event.unitOfWork.insertions }} / {{ event.unitOfWork.updates }} / {{ event.unitOfWork.deletions }}</td><td class="morm-num">{{ event.unitOfWork.collectionUpdates }} / {{ event.unitOfWork.collectionDeletions }}</td><td class="morm-num">{{ event.timeMs|number_format(3) }}</td><td>{{ ui.outcome(event.failed) }}</td></tr>{% endif %}{% else %}<tr><td colspan="6">No phase events retained. Aggregate phase metrics remain available above.</td></tr>{% endfor %}
+    </tbody></table></div><p class="morm-note">Managed counts are observed phase-boundary samples, not a live gauge or a measurement of request peak memory.</p></div>
+{% endif %}

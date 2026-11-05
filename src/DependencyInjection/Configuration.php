@@ -44,6 +44,17 @@ final class Configuration implements ConfigurationInterface
                 ->integerNode('max_queries')->min(0)->max(10000)->defaultValue(200)->end()
                 ->integerNode('max_sql_length')->min(128)->max(100000)->defaultValue(10000)->end()
                 ->integerNode('max_events')->min(0)->max(10000)->defaultValue(200)->end()
+                ->arrayNode('advisor')->addDefaultsIfNotSet()->children()
+                    ->booleanNode('enabled')->defaultTrue()->end()
+                    ->integerNode('max_findings')->min(1)->max(50)->defaultValue(10)->end()
+                    ->integerNode('repeated_query_threshold')->min(2)->defaultValue(5)->end()
+                    ->floatNode('slow_query_ms')->min(0)->defaultValue(10)->end()
+                    ->integerNode('managed_entities_threshold')->min(1)->defaultValue(1000)->end()
+                    ->floatNode('change_sets_ms')->min(0)->defaultValue(10)->end()
+                    ->integerNode('batch_fallback_threshold')->min(2)->defaultValue(5)->end()
+                    ->integerNode('l2_min_lookups')->min(1)->defaultValue(20)->end()
+                    ->floatNode('l2_min_hit_rate')->min(0)->max(1)->defaultValue(0.5)->end()
+                ->end()->end()
             ->end()->end()
         ->end();
         return $tree;

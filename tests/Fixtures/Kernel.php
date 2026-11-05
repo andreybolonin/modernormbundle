@@ -33,7 +33,24 @@ final class Kernel extends BaseKernel
         if ($this->ui) { yield new TwigBundle(); yield new WebProfilerBundle(); }
     }
     public function getProjectDir(): string { return dirname(__DIR__, 2); }
-    public function getCacheDir(): string { return sys_get_temp_dir().'/modernorm-bundle-tests/'.substr(hash('sha256', file_get_contents(__FILE__).file_get_contents(dirname(__DIR__, 2).'/src/DependencyInjection/ModernORMExtension.php').file_get_contents(dirname(__DIR__, 2).'/composer.lock')), 0, 12).'/'.(int)$this->profiling.(int)$this->statistics.(int)$this->ui.(int)$this->sql; }
+    private ?string $fixtureHash = null;
+    public function getCacheDir(): string
+    {
+        if ($this->fixtureHash === null) {
+            $root = dirname(__DIR__, 2);
+            $files = [__FILE__, $root.'/composer.lock', (new \ReflectionClass(Statistics::class))->getFileName()];
+            foreach (['src', 'templates'] as $directory) {
+                foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root.'/'.$directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
+                    if ($file->isFile()) { $files[] = $file->getPathname(); }
+                }
+            }
+            sort($files);
+            $hash = hash_init('sha256');
+            foreach ($files as $file) { hash_update_file($hash, $file); }
+            $this->fixtureHash = substr(hash_final($hash), 0, 12);
+        }
+        return sys_get_temp_dir().'/modernorm-bundle-tests/'.$this->fixtureHash.'/'.(int)$this->profiling.(int)$this->statistics.(int)$this->ui.(int)$this->sql;
+    }
     public function getLogDir(): string { return $this->getCacheDir().'/log'; }
     protected function configureContainer(ContainerConfigurator $container): void
     {

@@ -1,0 +1,25 @@
+{% macro icon(name) %}
+    {% set paths = {
+        database: 'M4 6c0-4 16-4 16 0s-16 4-16 0zm0 0v12c0 4 16 4 16 0V6M4 12c0 4 16 4 16 0',
+        clock: 'M12 7v5l3 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
+        layers: 'm12 3 10 5-10 5L2 8l10-5zm-10 9 10 5 10-5M2 17l10 5 10-5',
+        activity: 'M2 12h5l3-9 4 18 3-9h5',
+        rows: 'M3 4h18v16H3V4zm0 5h18M8 4v16',
+        alert: 'm12 3 10 18H2L12 3zm0 6v5m0 3v1',
+        arrow: 'M4 12h16m-6-6 6 6-6 6'
+    } %}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ paths[name]|default(paths.activity) }}"/></svg>
+{% endmacro %}
+
+{% macro metric(label, value, unit = '', icon = 'activity', href = null) %}
+    {% if href %}<a class="morm-metric" href="{{ href }}">{% else %}<div class="morm-metric">{% endif %}
+        <span class="morm-metric-icon">{{ _self.icon(icon) }}</span>
+        <span><strong>{{ value is null ? '—' : value }}{% if unit and value is not null %}<small> {{ unit }}</small>{% endif %}</strong><span class="morm-metric-label">{{ label }}</span></span>
+    {% if href %}</a>{% else %}</div>{% endif %}
+{% endmacro %}
+
+{% macro unavailable(subject) %}
+    <div class="morm-empty"><strong>{{ subject }} not collected in this profile</strong><p>Capture a new profile with a core that provides these Statistics events. Unavailable values are shown as —.</p></div>
+{% endmacro %}
+
+{% macro outcome(failed) %}<span class="morm-badge {{ failed ? 'morm-danger' : 'morm-success' }}">{{ failed ? 'error' : 'ok' }}</span>{% endmacro %}

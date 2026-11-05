@@ -1,0 +1,33 @@
+{% import '@ModernORM/Collector/_macros.html.twig' as ui %}
+<div class="morm-section-title"><h3>Request overview</h3><span class="morm-badge">{{ collector.errorCount }} operation errors · scopes can overlap</span></div>
+<div class="morm-columns">
+    <div class="morm-box"><h4>Operation totals</h4><div class="morm-table"><table>
+        <thead><tr><th>Scope</th><th class="morm-num">Attempts</th><th class="morm-num">Time (ms)</th><th class="morm-num">Errors</th></tr></thead><tbody>
+        {% for name, scope in {SQL: metrics.sql, Flush: metrics.flush, 'Batch fetching': metrics.batch, Hydration: metrics.hydration, Bulk: metrics.bulk} %}
+            <tr><td>{{ name }}</td><td class="morm-num">{{ scope.count ?? '—' }}</td><td class="morm-num">{{ scope is null ? '—' : scope.timeMs|number_format(3) }}</td><td class="morm-num">{{ scope.errors ?? '—' }}</td></tr>
+        {% endfor %}</tbody></table></div><p class="morm-note">Counters describe completed attempts, including failures. Rollback does not subtract work.</p>
+    </div>
+    <div class="morm-box"><h4>Profile coverage</h4><dl class="morm-dl">
+        <dt>SQL text</dt><dd>{{ collector.sqlEnabled ? collector.queries|length ~ ' retained' : 'Not collected' }}</dd>
+        <dt>Completion events</dt><dd>{{ collector.events|length }} retained</dd>
+        <dt>UnitOfWork phases</dt><dd>{{ metrics.unitOfWork is not null ? 'Available' : 'Not collected' }}</dd>
+        <dt>Hydration / bulk</dt><dd>{{ metrics.hydration is not null and metrics.bulk is not null ? 'Available' : 'Not collected' }}</dd>
+        <dt>L2 entity cache</dt><dd>{{ collector.l2.enabled ? 'Configured' : 'Not configured' }}</dd>
+        <dt>Execution plans</dt><dd>Not collected</dd>
+    </dl></div>
+</div>
+<div class="morm-box"><div class="morm-section-title"><h4>Slowest retained SQL</h4><a href="{{ profileLink }}&amp;modernorm_tab=queries">All queries</a></div>
+    {% if collector.sqlEnabled %}<div class="morm-table"><table><thead><tr><th>#</th><th>SQL</th><th class="morm-num">Time (ms)</th><th>Result</th></tr></thead><tbody>
+        {% for query in collector.slowestQueries %}<tr><td><a href="{{ profileLink }}&amp;modernorm_tab=queries#morm-query-{{ query.index }}">{{ query.index }}</a></td><td><pre class="morm-sql">{{ query.sql }}</pre></td><td class="morm-num">{{ query.durationMilliseconds|number_format(3) }}</td><td>{{ ui.outcome(query.failed) }}{% if query.sqlState %} {{ query.sqlState }}{% endif %}</td></tr>
+        {% else %}<tr><td colspan="4">No SQL text retained.</td></tr>{% endfor %}
+    </tbody></table></div>{% else %}<p class="morm-note">SQL text history was not enabled for this profile. SQL counters remain available.</p>{% endif %}
+</div>
+<div class="morm-columns">
+    <div class="morm-box"><h4>Batch fallback decisions</h4><table><thead><tr><th>Reason</th><th class="morm-num">Count</th></tr></thead><tbody>
+        {% for reason, count in metrics.batch.fallbackCounts %}<tr><td>{{ reason }}</td><td class="morm-num">{{ count }}</td></tr>{% else %}<tr><td colspan="2">No fallback decisions recorded.</td></tr>{% endfor %}
+    </tbody></table><p class="morm-note">A fallback describes loader selection; it is not proof of an N+1 query.</p></div>
+    <div class="morm-box"><h4>Environment</h4><dl class="morm-dl"><dt>Environment</dt><dd>{{ runtime.environment }}</dd><dt>ModernORM</dt><dd>{{ runtime.coreVersion }}</dd><dt>PHP</dt><dd>{{ runtime.phpVersion ?? 'Not recorded' }}</dd><dt>Configured PostgreSQL</dt><dd>{{ runtime.configuredServerVersion ?? 'Auto / not recorded' }}</dd></dl></div>
+</div>
+<details class="morm-box"><summary>Retained operation history ({{ collector.events|length }})</summary><div class="morm-table"><table><thead><tr><th>Scope</th><th>Entity / association</th><th class="morm-num">Time (ms)</th><th>Result</th></tr></thead><tbody>
+    {% for event in collector.eventRows %}<tr><td>{{ event.kind }}</td><td>{{ event.association ?? event.entityClass ?? '—' }}</td><td class="morm-num">{{ event.timeMs|number_format(3) }}</td><td>{{ ui.outcome(event.failed) }}</td></tr>{% else %}<tr><td colspan="4">No events retained.</td></tr>{% endfor %}
+</tbody></table></div></details>

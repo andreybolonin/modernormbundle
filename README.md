@@ -4,20 +4,55 @@ Symfony integration for **ModernORM**, the PostgreSQL-first ORM for PHP 8.4+.
 
 Connect your EntityManager, attribute mappings, batch fetching, PSR-6 caches and Statistics API to Symfony. Inspect SQL operation counts and timings, flushes, batch groups, fallback decisions, optional SQL details and L2 cache activity directly in the debug toolbar and Profiler.
 
+## Profiler gallery
+
+Inspect an entire request from one dashboard, then follow the data into Queries, UnitOfWork, Hydration, Batch Fetching, L2 Cache, Bulk Operations and PostgreSQL tabs. The Performance Advisor provides evidence and links to the relevant panel.
+
+![ModernORM request dashboard with a repeated-query recommendation](docs/screenshots/symfony-profiler/overview.png)
+
+### Association batch fetching
+
+See ManyToOne, OneToMany and ManyToMany batches, selected group sizes and association-level activity.
+
+![ModernORM batch fetching totals and association groups](docs/screenshots/symfony-profiler/batch.png)
+
+### Entity L2 cache
+
+Inspect hits, misses, puts and invalidations alongside this request's cache hit rate.
+
+![ModernORM entity L2 cache counters](docs/screenshots/symfony-profiler/cache.png)
+
+### PostgreSQL bulk writes
+
+Review bulk INSERT, UPDATE and DELETE calls, affected rows, persistence-context policies and recorded database outcomes.
+
+![ModernORM bulk INSERT, UPDATE and DELETE with CLEAR policy](docs/screenshots/symfony-profiler/bulk.png)
+
+<details>
+<summary>Dark theme and additional panels</summary>
+
+![ModernORM dashboard using the Symfony dark theme](docs/screenshots/symfony-profiler/overview-dark.png)
+
+[Queries](docs/screenshots/symfony-profiler/queries.png) · [UnitOfWork](docs/screenshots/symfony-profiler/unitofwork.png) · [Hydration](docs/screenshots/symfony-profiler/hydration.png) · [PostgreSQL](docs/screenshots/symfony-profiler/postgresql.png)
+
+</details>
+
+Screenshots show the local implementation running a PostgreSQL demonstration workload with real bulk operations and deliberately repeated reference lookups. Figures are illustrative, not benchmark results. Extended bulk, hydration and UnitOfWork metrics require a core version exposing the corresponding operation events; older saved profiles show unavailable metrics explicitly when fields are absent. EXPLAIN plans and buffer statistics are not collected. See the [capture notes](docs/screenshots/symfony-profiler/README.md).
+
 ## Requirements
 
-- PHP 8.4+, PostgreSQL and ModernORM.
+- PHP 8.4+, PostgreSQL and ModernORM `^0.1.0-beta.3`.
 - Symfony 7.4 or 8.x.
 - TwigBundle and WebProfilerBundle for the optional debug interface.
 
 ## Installation
 
-Both packages are available on Packagist as `v0.1.0-beta.1`.
+Current beta release: **v0.1.0-beta.3** for both packages.
 
 The beta requires explicit stability flags for both packages in the application's root manifest:
 
 ```sh
-composer require 'andreybolonin/modernorm:^0.1@beta' 'andreybolonin/modernorm-bundle:^0.1@beta'
+composer require 'andreybolonin/modernorm:^0.1.0-beta.3' 'andreybolonin/modernorm-bundle:^0.1.0-beta.3'
 ```
 
 For bundle development, clone this repository and run `composer install` followed by `composer test`. The core is resolved from Packagist through Composer; a sibling checkout or custom repository is not required. Joint development can use a separate local Composer manifest with a path repository.
@@ -77,9 +112,9 @@ For example, `bin/console modernorm:schema:create --dump-sql` generates PostgreS
 
 ## Profiler
 
-The toolbar shows SQL count/time, flush and batch counts, and L2 hits/misses. The panel includes errors, batch totals by association kind, selected group sizes, fallback reasons, global L2 counters and a bounded completion history.
+The toolbar shows SQL count/time, flush and batch counts, L2 hits/misses and Advisor findings. Eight tabs provide a request dashboard, query history, UnitOfWork phases, hydration, batch groups, entity L2 counters, bulk outcomes and PostgreSQL context. Completion history is bounded and stored with the profile.
 
-History is recorded only during HTTP requests while Symfony's Profiler is enabled. The history limit does not limit aggregate counters. Core operation events contain no SQL text, bindings, identifiers or exception messages. SQL timing excludes fetching/hydration; batch and flush timings overlap SQL time. Bulk SQL is included in SQL totals; separate bulk, hydration and UnitOfWork metrics are not exposed by the current core API.
+History is recorded only during HTTP requests while Symfony's Profiler is enabled. The history limit does not limit aggregate counters. Core operation events contain no SQL text, bindings, identifiers or exception messages. SQL timing excludes fetching/hydration; batch and flush timings overlap SQL time. Bulk SQL is included in SQL totals. When the core exposes extended operation events, separate bulk, hydration and UnitOfWork metrics are displayed. Older saved profiles display explicit unavailable states for missing metrics. UnitOfWork write counts describe scheduled work, not executed DML totals.
 
 Enable `modernorm.profiler.collect_sql: true` for a query list containing SQL text, duration, driver method and error SQLSTATE. This is a separate DBAL middleware in the bundle; the core Statistics API remains unchanged. Collection requires an active profiled HTTP request and works independently of aggregate Statistics being enabled. With `collect_sql: false`, the SQL middleware is not installed.
 
@@ -95,7 +130,7 @@ Statistics, L2 counters, SQL history and event history are registered with `kern
 
 Main HTTP requests start a fresh measurement scope; subrequests do not reset the parent counters. Profiles store value snapshots and remain readable after service reset.
 
-Additional `ModernORM\Statistics\OperationObserver` services can be tagged `modernorm.statistics_observer`. They receive completion events independently of the Profiler, providing an integration point for separate Prometheus/OpenTelemetry adapters. This package does not implement those exporters or active tracing spans.
+Additional `ModernORM\Statistics\OperationObserver` services can be tagged `modernorm.statistics_observer`. They receive completion events independently of the Profiler, providing an integration point for separate Prometheus/OpenTelemetry adapters. An opt-in [OpenTelemetry metrics prototype](examples/observability/README.md) now connects the operation observer to an application-provided MeterProvider, with a runnable Collector → VictoriaMetrics → Grafana stack and a Prometheus-compatible Collector endpoint. The SDK/exporter dependencies live in the example; nothing is enabled automatically. Active tracing spans and global L2 metric export are not included in this first slice.
 
 
 ## Migrations (optional)

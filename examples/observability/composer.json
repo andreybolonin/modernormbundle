@@ -1,0 +1,22 @@
+{
+    "name": "modernorm/observability-example",
+    "description": "Local OTLP metrics proof of concept for ModernORMBundle",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "open-telemetry/api": "^1.11",
+        "open-telemetry/exporter-otlp": "^1.5",
+        "open-telemetry/sdk": "^1.16",
+        "php-http/guzzle7-adapter": "^1.0"
+    },
+    "config": {
+        "sort-packages": true,
+        "platform": {
+            "php": "8.4.0"
+        }
+    },
+    "scripts": {
+        "test": "@php ../../vendor/bin/phpunit --configuration ../../phpunit.xml --bootstrap bootstrap.php tests"
+    }
+}

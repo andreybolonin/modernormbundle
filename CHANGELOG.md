@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-beta.3 — 2026-11-05
+
+- Make repeated worker resets safe when the EntityManager lazy proxy has not been initialized since the preceding reset.
+- Add eight saved-profile tabs, request dashboard, configurable Performance Advisor and native Symfony light/dark themes.
+- Display extended bulk, hydration and UnitOfWork events from ModernORM beta.3; update the README with actual screenshots.
+- Add opt-in OpenTelemetry Metrics API observer and HTTP/console/Messenger flush boundaries, independent of Profiler history and request Statistics resets.
+- Add an isolated OTLP/HTTP → Collector → VictoriaMetrics → Grafana prototype with pinned dependencies, dashboard provisioning and real PHP-FPM/concurrent-writer/restart verification. Delivery remains best effort; no core monitoring dependencies or automatic SDK setup.
+
 ## 0.1.0-beta.1 — 2026-11-05
 
 First public beta, with a bounded integration contract.

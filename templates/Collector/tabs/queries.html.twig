@@ -1,0 +1,23 @@
+{% import '@ModernORM/Collector/_macros.html.twig' as ui %}
+<div class="morm-section-title"><h3>SQL queries <span class="morm-badge">{{ metrics.sql.count }} operations</span></h3></div>
+{% set search = app.request.query.get('modernorm_query', '') %}
+{% set errorsOnly = app.request.query.get('modernorm_errors', '') == '1' %}
+{% if collector.sqlEnabled %}
+    <div class="morm-box">
+        <form class="morm-filter" method="get" action="{{ path('_profiler', {token: token}) }}">
+            <input type="hidden" name="panel" value="modernorm"><input type="hidden" name="modernorm_tab" value="queries">
+            <label>Filter retained SQL<input type="search" maxlength="200" name="modernorm_query" value="{{ search }}" placeholder="Search query text…"></label>
+            <label>Result<select name="modernorm_errors"><option value="" {{ not errorsOnly ? 'selected' }}>All queries</option><option value="1" {{ errorsOnly ? 'selected' }}>Errors only</option></select></label>
+            <button class="morm-button" type="submit">Filter</button><a href="{{ profileLink }}&amp;modernorm_tab=queries">Reset</a>
+        </form>
+        {% if collector.queriesDropped %}<div class="morm-notice">{{ collector.queriesDropped }} SQL entries omitted because the query limit was reached. Advisor query findings cover only the retained sample.</div>{% endif %}
+        <div class="morm-table"><table><thead><tr><th>#</th><th class="morm-num">Time (ms)</th><th>Driver call</th><th>SQL</th><th>Result</th></tr></thead><tbody>
+            {% for query in collector.filteredQueries(search, errorsOnly) %}<tr id="morm-query-{{ query.index }}"><td>{{ query.index }}</td><td class="morm-num">{{ query.durationMilliseconds|number_format(3) }}</td><td><span class="morm-badge">{{ query.operation }}</span></td><td class="morm-query"><pre class="morm-sql">{{ query.sql }}</pre>{% if query.truncated %}<small>SQL text truncated</small>{% endif %}</td><td>{{ ui.outcome(query.failed) }}{% if query.sqlState %}<small> SQLSTATE {{ query.sqlState }}</small>{% endif %}</td></tr>
+            {% else %}<tr><td colspan="5">No retained queries match the selected filter.</td></tr>{% endfor %}
+        </tbody></table></div>
+        <p class="morm-note">Bindings and exception messages are not stored. Literal values in SQL remain visible. Driver time excludes later fetching and hydration; returned row counts and call-site backtraces are not collected.</p>
+    </div>
+    <div class="morm-box"><h4>Repeated SQL</h4><div class="morm-table"><table><thead><tr><th>SQL</th><th class="morm-num">Executions</th><th class="morm-num">Total (ms)</th></tr></thead><tbody>
+        {% for query in collector.repeatedQueries %}<tr><td><a href="#morm-query-{{ query.queryIndex }}">Query #{{ query.queryIndex }}</a><pre class="morm-sql">{{ query.sql }}</pre></td><td class="morm-num">{{ query.count }}</td><td class="morm-num">{{ query.durationMilliseconds|number_format(3) }}</td></tr>{% else %}<tr><td colspan="3">No repeated SQL in retained entries.</td></tr>{% endfor %}
+    </tbody></table></div><p class="morm-note">Grouped by exact full SQL fingerprint, including executions with different bindings. Repetition alone does not prove N+1.</p></div>
+{% else %}<div class="morm-empty"><strong>SQL text was not collected</strong><p>Enable <code>modernorm.profiler.collect_sql</code> and capture a new request. Aggregate SQL counts and timing are available above.</p></div>{% endif %}

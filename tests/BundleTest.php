@@ -180,7 +180,7 @@ final class BundleTest extends TestCase
         self::assertSame(3, $collector->getRepeatedQueries()[0]['count']);
         self::assertStringNotContainsString('private-binding', serialize($collector));
         self::assertSame('execute', $collector->getQueries()[0]['operation']);
-        [$response] = $this->request($kernel, '/_profiler/'.$profile->getToken().'?panel=modernorm');
+        [$response] = $this->request($kernel, '/_profiler/'.$profile->getToken().'?panel=modernorm&modernorm_tab=queries');
         self::assertStringContainsString('SELECT CAST(? AS TEXT)', $response->getContent());
         self::assertStringContainsString('Repeated SQL', $response->getContent());
         self::assertStringContainsString('22012', $response->getContent());
@@ -232,6 +232,39 @@ final class BundleTest extends TestCase
         self::assertSame([], $container->get('modernorm.profiler.sql_history')->queries());
         self::assertSame(9, (int) $manager->getConnection()->fetchOne('SELECT 9'));
         self::assertSame(1, $collector->getSnapshot()->flushErrors);
+    }
+    public function testEverySavedProfilerTabAndEmptyProfileRenderWithNativeTheme(): void
+    {
+        $kernel = $this->boot();
+        foreach (['/metrics', '/empty'] as $route) {
+            [, $profile] = $this->request($kernel, $route);
+            foreach (['overview', 'queries', 'unitofwork', 'hydration', 'batch', 'cache', 'bulk', 'postgresql'] as $tab) {
+                [$response] = $this->request($kernel, '/_profiler/'.$profile->getToken().'?panel=modernorm&modernorm_tab='.$tab);
+                $html = $response->getContent();
+                self::assertStringContainsString('data-modernorm-panel="'.$tab.'"', $html);
+                self::assertStringContainsString('var(--color-text)', $html);
+                self::assertStringContainsString('var(--color-link)', $html);
+            }
+            [$response] = $this->request($kernel, '/_profiler/'.$profile->getToken().'?panel=modernorm&modernorm_tab=invalid');
+            self::assertStringContainsString('data-modernorm-panel="overview"', $response->getContent());
+        }
+    }
+    public function testRepeatedResetsPreserveAnUninitializedManager(): void
+    {
+        if (!getenv('MODERNORM_TEST_URL')) { self::markTestSkipped('Set MODERNORM_TEST_URL.'); }
+        $kernel = $this->boot(false, true, false);
+        $container = $kernel->getContainer()->get('test.service_container');
+        $manager = $container->get('test.manager');
+        $reflection = new \ReflectionClass(\ModernORM\EntityManager::class);
+        self::assertTrue($reflection->isUninitializedLazyObject($manager));
+        for ($i = 0; $i < 2; ++$i) { $kernel->getContainer()->get('services_resetter')->reset(); }
+        self::assertTrue($reflection->isUninitializedLazyObject($manager));
+        self::assertSame(42, (int) $manager->getConnection()->fetchOne('SELECT 42'));
+        for ($i = 0; $i < 2; ++$i) { $kernel->getContainer()->get('services_resetter')->reset(); }
+        self::assertTrue($reflection->isUninitializedLazyObject($manager));
+        self::assertTrue($manager->isOpen());
+        self::assertSame(43, (int) $manager->getConnection()->fetchOne('SELECT 43'));
+        self::assertSame(1, $container->get(Statistics::class)->snapshot()->sqlCount);
     }
     public function testRejectsNonPostgreSQL(): void
     {

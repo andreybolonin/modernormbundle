@@ -4,20 +4,20 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "63f843a083e6ea3a3c0caacd5759020b",
+    "content-hash": "c6212b0e43ddd2596c251a398bc09da0",
     "packages": [
         {
             "name": "andreybolonin/modernorm",
-            "version": "v0.1.0-beta.1",
+            "version": "v0.1.0-beta.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/andreybolonin/modernorm.git",
-                "reference": "d897ef80b2565dbd9501bf035e3a023fd30c7a78"
+                "reference": "caa1db607b5e96b377fe7d6146b170920116da07"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/andreybolonin/modernorm/zipball/d897ef80b2565dbd9501bf035e3a023fd30c7a78",
-                "reference": "d897ef80b2565dbd9501bf035e3a023fd30c7a78",
+                "url": "https://api.github.com/repos/andreybolonin/modernorm/zipball/caa1db607b5e96b377fe7d6146b170920116da07",
+                "reference": "caa1db607b5e96b377fe7d6146b170920116da07",
                 "shasum": ""
             },
             "require": {
@@ -36,9 +36,12 @@
                 "symfony/polyfill-php86": "^1.37"
             },
             "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.90",
+                "phpstan/phpstan": "^2.1",
                 "phpunit/phpunit": "^11.5",
                 "psr/log": "^3",
-                "symfony/cache": "^7.4"
+                "symfony/cache": "^7.4",
+                "symfony/console": "^7.4"
             },
             "suggest": {
                 "symfony/cache": "PSR-6 adapters for filesystem, Redis and other cache backends",
@@ -50,27 +53,7 @@
                     "ModernORM\\": "src/"
                 }
             },
-            "autoload-dev": {
-                "psr-4": {
-                    "ModernORM\\Tests\\": "tests/"
-                }
-            },
-            "archive": {
-                "exclude": [
-                    "/.git",
-                    "/.github",
-                    "/.idea",
-                    "/.phpunit.cache",
-                    "/vendor",
-                    "/.env",
-                    "/.env.*"
-                ]
-            },
-            "scripts": {
-                "test": [
-                    "phpunit"
-                ]
-            },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
@@ -87,7 +70,7 @@
                 "issues": "https://github.com/andreybolonin/modernorm/issues",
                 "source": "https://github.com/andreybolonin/modernorm"
             },
-            "time": "2026-11-05T09:12:17+00:00"
+            "time": "2026-11-05T13:50:57+00:00"
         },
         {
             "name": "doctrine/collections",

@@ -1,0 +1,9 @@
+{% import '@ModernORM/Collector/_macros.html.twig' as ui %}
+<h3>L2 Cache</h3>
+{% if not collector.l2.enabled %}<div class="morm-empty"><strong>L2 cache is not configured</strong><p>Entity cache metrics will be available when a PSR-6 L2 pool is configured.</p></div>{% else %}
+    {% set l2 = collector.l2 %}
+    <div class="morm-metrics morm-four">{{ ui.metric('Hits', l2.hits, '', 'layers') }}{{ ui.metric('Misses', l2.misses, '', 'database') }}{{ ui.metric('Puts', l2.puts, '', 'rows') }}{{ ui.metric('Eviction events', l2.evictions, '', 'activity') }}</div>
+    <div class="morm-columns"><div class="morm-box"><h4>Entity cache reuse</h4>
+        {% if collector.l2HitRate is not null %}<strong>{{ collector.l2HitRate|number_format(1) }}% hit rate</strong><progress class="morm-progress" max="100" value="{{ collector.l2HitRate|number_format(2, '.', '') }}" aria-label="L2 hit rate">{{ collector.l2HitRate|number_format(1) }}%</progress><p class="morm-note">{{ l2.hits + l2.misses }} lookups in this request. No trend across other requests is inferred.</p>{% else %}<p>No L2 lookups were recorded. Hit rate is unavailable, rather than 0%.</p>{% endif %}
+    </div><div class="morm-box"><h4>Scope and interpretation</h4><p>Entity-by-ID caching and supported lazy target loads. Query-result and collection L2 caches are outside this contract.</p><p class="morm-note">Eviction events include pre/post-write invalidation and do not equal distinct modified entities. Bulk writes can invalidate a whole declared class. Identity Map hits do not count as L2 hits.</p></div></div>
+{% endif %}

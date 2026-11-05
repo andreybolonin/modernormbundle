@@ -1,0 +1,16 @@
+{% import '@ModernORM/Collector/_macros.html.twig' as ui %}
+<h3>Batch Fetching</h3>
+{% set batch = metrics.batch %}
+<div class="morm-metrics morm-four">
+    {{ ui.metric('Selected batch attempts', batch.count, '', 'layers') }}
+    {{ ui.metric('Selected references', batch.selectedReferences, '', 'rows') }}
+    {{ ui.metric('Selected collections', batch.selectedCollections, '', 'rows') }}
+    {{ ui.metric('Average selected group', batch.count ? ((batch.selectedReferences + batch.selectedCollections) / batch.count)|number_format(1) : null, '', 'activity') }}
+</div>
+<div class="morm-box"><h4>Totals by association kind</h4><div class="morm-table"><table><thead><tr><th>Kind</th><th class="morm-num">Loads</th><th class="morm-num">Selected refs / collections</th><th class="morm-num">Time (ms)</th><th class="morm-num">Errors</th><th class="morm-num">L2 hit / miss / put</th></tr></thead><tbody>
+    {% for kind, group in batch.byKind %}<tr><td>{{ kind }}</td><td class="morm-num">{{ group.count }}</td><td class="morm-num">{{ group.selectedReferences }} / {{ group.selectedCollections }}</td><td class="morm-num">{{ group.timeMs|number_format(3) }}</td><td class="morm-num">{{ group.errors }}</td><td class="morm-num">{{ group.cacheHits }} / {{ group.cacheMisses }} / {{ group.cachePuts }}</td></tr>{% endfor %}
+</tbody></table></div></div>
+<div class="morm-columns"><div class="morm-box"><h4>Association groups · retained events</h4><div class="morm-table"><table><thead><tr><th>Association / target</th><th class="morm-num">Loads</th><th class="morm-num">Configured max</th><th class="morm-num">Selected</th><th class="morm-num">Time (ms)</th></tr></thead><tbody>
+    {% for group in collector.batchGroups %}<tr><td>{{ group.association ?? group.entity ?? 'Not attributed' }}<small class="morm-note"> {{ group.kind }}</small></td><td class="morm-num">{{ group.loads }}</td><td class="morm-num">{{ group.configuredMax }}</td><td class="morm-num">{{ group.selected }}</td><td class="morm-num">{{ group.timeMs|number_format(3) }}</td></tr>{% else %}<tr><td colspan="5">No association events retained.</td></tr>{% endfor %}
+</tbody></table></div></div>
+<div class="morm-box"><h4>Batch fallback decisions</h4><table><thead><tr><th>Reason</th><th class="morm-num">Count</th></tr></thead><tbody>{% for reason, count in batch.fallbackCounts %}<tr><td>{{ reason }}</td><td class="morm-num">{{ count }}</td></tr>{% else %}<tr><td colspan="2">No fallback decisions recorded.</td></tr>{% endfor %}</tbody></table><p class="morm-note">Fallback can be intentional. Selected references and owners are not necessarily database rows or separate queries.</p></div></div>

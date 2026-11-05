@@ -2,6 +2,7 @@ name: Tests
 
 on:
   push:
+    branches: ['main']
   pull_request:
   workflow_dispatch:
 
@@ -23,7 +24,7 @@ jobs:
         php: ['8.4', '8.5']
         symfony: ['locked', '7.4', '8.1']
     env:
-      COMPOSER_ROOT_VERSION: 0.1.0-beta.1
+      COMPOSER_ROOT_VERSION: 0.1.0-beta.3
       MODERNORM_TEST_URL: postgresql://postgres:postgres@127.0.0.1:5432/modernorm_test
     services:
       postgres:
@@ -75,6 +76,12 @@ jobs:
 
       - name: Migrations and fixtures from an empty schema
         run: php examples/migrations-fixtures/run.php
+
+      - name: Optional OpenTelemetry adapter tests
+        if: matrix.symfony == 'locked'
+        run: |
+          composer install --working-dir=examples/observability --no-interaction --prefer-dist --no-progress
+          php vendor/bin/phpunit --bootstrap examples/observability/bootstrap.php examples/observability/tests --fail-on-skipped
 
       - name: Install production dependencies only
         run: composer install --no-dev --no-interaction --prefer-dist --no-progress

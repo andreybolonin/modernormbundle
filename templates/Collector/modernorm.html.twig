@@ -1,82 +1,61 @@
 {% extends '@WebProfiler/Profiler/layout.html.twig' %}
+{% import '@ModernORM/Collector/_macros.html.twig' as ui %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style{% if csp_style_nonce is defined and csp_style_nonce %} nonce="{{ csp_style_nonce }}"{% endif %}>{{ include('@ModernORM/Collector/_styles.html.twig') }}</style>
+{% endblock %}
 
 {% block toolbar %}
-    {% set icon %}<span class="sf-toolbar-value">M</span><span class="sf-toolbar-value">{{ collector.snapshot.sqlCount }}</span><span class="sf-toolbar-label">SQL</span>{% endset %}
+    {% set icon %}<span class="sf-toolbar-value">M</span><span class="sf-toolbar-value">{{ collector.metrics.sql.count }}</span><span class="sf-toolbar-label">SQL</span>{% endset %}
     {% set text %}
         <div class="sf-toolbar-info-piece"><b>ModernORM</b><span>PostgreSQL</span></div>
-        <div class="sf-toolbar-info-piece"><b>SQL time</b><span>{{ collector.snapshot.sqlTimeMilliseconds|number_format(2) }} ms</span></div>
-        <div class="sf-toolbar-info-piece"><b>Flush / batch</b><span>{{ collector.snapshot.flushCount }} / {{ collector.snapshot.batch.count }}</span></div>
+        <div class="sf-toolbar-info-piece"><b>SQL time</b><span>{{ collector.metrics.sql.timeMs|number_format(2) }} ms</span></div>
+        <div class="sf-toolbar-info-piece"><b>Flush / batch</b><span>{{ collector.metrics.flush.count }} / {{ collector.metrics.batch.count }}</span></div>
         <div class="sf-toolbar-info-piece"><b>L2 hits / misses</b><span>{{ collector.l2.hits }} / {{ collector.l2.misses }}</span></div>
+        <div class="sf-toolbar-info-piece"><b>Advisor findings</b><span>{{ collector.findings|length }}</span></div>
         <div class="sf-toolbar-info-piece"><b>Statistics</b><span>{{ collector.enabled ? 'enabled' : 'disabled' }}</span></div>
     {% endset %}
-    {{ include('@WebProfiler/Profiler/toolbar_item.html.twig', {link: profiler_url, status: collector.errorCount > 0 ? 'red' : 'normal'}) }}
+    {{ include('@WebProfiler/Profiler/toolbar_item.html.twig', {link: profiler_url, status: collector.errorCount > 0 ? 'red' : (collector.findings ? 'yellow' : 'normal')}) }}
 {% endblock %}
 
 {% block menu %}
-    <span class="label {{ collector.errorCount > 0 ? 'label-status-error' }}"><span class="icon">M</span><strong>ModernORM</strong><span class="count">{{ collector.snapshot.sqlCount }}</span></span>
+    <span class="label {{ collector.errorCount > 0 ? 'label-status-error' }}"><span class="icon">M</span><strong>ModernORM</strong><span class="count">{{ collector.metrics.sql.count }}</span></span>
 {% endblock %}
 
 {% block panel %}
-    <h2>ModernORM <small>PostgreSQL</small></h2>
-    {% if not collector.enabled %}<div class="empty"><p>Statistics are disabled. Enable <code>modernorm.statistics.enabled</code> to collect operation metrics.</p></div>{% endif %}
-    {% set stats = collector.snapshot %}
-    <div class="metrics">
-        <div class="metric"><span class="value">{{ stats.sqlCount }}</span><span class="label">SQL operations</span></div>
-        <div class="metric"><span class="value">{{ stats.sqlTimeMilliseconds|number_format(2) }} <span class="unit">ms</span></span><span class="label">SQL time</span></div>
-        <div class="metric"><span class="value">{{ stats.flushCount }}</span><span class="label">Flushes</span></div>
-        <div class="metric"><span class="value">{{ stats.flushTimeMilliseconds|number_format(2) }} <span class="unit">ms</span></span><span class="label">Flush time</span></div>
-        <div class="metric"><span class="value">{{ stats.batch.count }}</span><span class="label">Batch groups</span></div>
+    {% set tabs = {overview: 'Overview', queries: 'Queries', unitofwork: 'UnitOfWork', hydration: 'Hydration', batch: 'Batch Fetching', cache: 'L2 Cache', bulk: 'Bulk Operations', postgresql: 'PostgreSQL'} %}
+    {% set active = app.request.query.get('modernorm_tab', 'overview') %}
+    {% if active not in tabs|keys %}{% set active = 'overview' %}{% endif %}
+    {% set metrics = collector.metrics %}
+    {% set runtime = collector.runtime %}
+    {% set profileLink = path('_profiler', {token: token, panel: 'modernorm'}) %}
+    <div class="morm-profiler" data-modernorm-panel="{{ active }}">
+        <header class="morm-heading">
+            <div><h2>{{ ui.icon('database') }} ModernORM</h2><p>PostgreSQL persistence, fetching, caching and request diagnostics.</p></div>
+            <div class="morm-meta"><span class="morm-badge">{{ runtime.environment }}</span><span class="morm-badge">{{ runtime.coreVersion }}</span></div>
+        </header>
+        {% if not collector.enabled %}<div class="morm-notice">Statistics are disabled. Enable <code>modernorm.statistics.enabled</code> and capture a new request.</div>{% endif %}
+        <div class="morm-metrics" aria-label="Request summary">
+            {{ ui.metric('SQL operations', metrics.sql.count, '', 'database', profileLink ~ '&modernorm_tab=queries') }}
+            {{ ui.metric('SQL time', metrics.sql.timeMs|number_format(2), 'ms', 'clock', profileLink ~ '&modernorm_tab=queries') }}
+            {{ ui.metric('L2 hit rate', collector.l2HitRate is null ? null : collector.l2HitRate|number_format(1), '%', 'layers', profileLink ~ '&modernorm_tab=cache') }}
+            {{ ui.metric('Advisor findings', collector.findings|length, '', 'alert', profileLink ~ '#performance-advisor') }}
+            {{ ui.metric('New hydrated entities', metrics.hydration is null ? null : metrics.hydration.entitiesCreated, '', 'rows', profileLink ~ '&modernorm_tab=hydration') }}
+            {{ ui.metric('Batch loads', metrics.batch.count, '', 'layers', profileLink ~ '&modernorm_tab=batch') }}
+            {{ ui.metric('Planned inserts · last write phase', metrics.unitOfWork.lastWrites.insertions ?? null, '', 'rows', profileLink ~ '&modernorm_tab=unitofwork') }}
+            {{ ui.metric('Planned updates · last write phase', metrics.unitOfWork.lastWrites.updates ?? null, '', 'rows', profileLink ~ '&modernorm_tab=unitofwork') }}
+            {{ ui.metric('Planned deletes · last write phase', metrics.unitOfWork.lastWrites.deletions ?? null, '', 'rows', profileLink ~ '&modernorm_tab=unitofwork') }}
+            {{ ui.metric('Flushes', metrics.flush.count, '', 'activity', profileLink ~ '&modernorm_tab=unitofwork') }}
+            {{ ui.metric('Flush time', metrics.flush.timeMs|number_format(2), 'ms', 'clock', profileLink ~ '&modernorm_tab=unitofwork') }}
+            {{ ui.metric('Hydration active time', metrics.hydration is null ? null : metrics.hydration.timeMs|number_format(2), 'ms', 'clock', profileLink ~ '&modernorm_tab=hydration') }}
+        </div>
+        <nav class="morm-tabs" aria-label="ModernORM sections">
+            {% for key, title in tabs %}<a href="{{ path('_profiler', {token: token, panel: 'modernorm', modernorm_tab: key}) }}" {% if active == key %}aria-current="page"{% endif %}>{{ title }}{% if key == 'queries' %} ({{ metrics.sql.count }}){% endif %}</a>{% endfor %}
+        </nav>
+        {% if collector.dropped %}<div class="morm-notice">{{ collector.dropped }} events omitted from the retained history. Aggregate counters remain complete; event tables and observed maxima are partial.</div>{% endif %}
+        <section aria-label="{{ tabs[active] }}">{{ include('@ModernORM/Collector/tabs/' ~ active ~ '.html.twig') }}</section>
+        {{ include('@ModernORM/Collector/_advisor.html.twig') }}
+        <p class="morm-note">SQL, flush, batch, hydration and UnitOfWork scopes overlap. Do not add their times. Error counts may describe the same failure at different layers. Observer errors: {{ metrics.observerErrors }}.</p>
     </div>
-    <h3>Operations</h3>
-    <table><thead><tr><th>Operation</th><th>Count</th><th>Time (ms)</th><th>Errors</th></tr></thead><tbody>
-        <tr><td>SQL</td><td>{{ stats.sqlCount }}</td><td>{{ stats.sqlTimeMilliseconds|number_format(3) }}</td><td>{{ stats.sqlErrors }}</td></tr>
-        <tr><td>Flush</td><td>{{ stats.flushCount }}</td><td>{{ stats.flushTimeMilliseconds|number_format(3) }}</td><td>{{ stats.flushErrors }}</td></tr>
-        <tr><td>Batch fetching</td><td>{{ stats.batch.count }}</td><td>{{ stats.batch.timeMilliseconds|number_format(3) }}</td><td>{{ stats.batch.errors }}</td></tr>
-    </tbody></table>
-    <p class="help">SQL time excludes fetching and hydration. Batch time includes loading and hydration. Timings overlap and must not be added. Error counts can describe the same failed operation at different levels.</p>
-    <h3>SQL queries</h3>
-    {% if collector.sqlEnabled %}
-        <p class="help">SQL text is enabled for this profile. Bindings and exception messages are not stored. Literal values written directly into SQL remain visible. Timings exclude result fetching and hydration.</p>
-        {% if collector.queriesDropped %}<p class="status-warning">{{ collector.queriesDropped }} SQL entries omitted because the query limit was reached.</p>{% endif %}
-        <table><thead><tr><th>#</th><th>SQL</th><th>Time (ms)</th><th>Method</th><th>Result</th></tr></thead><tbody>
-        {% for query in collector.queries %}<tr><td>{{ loop.index }}</td><td><pre>{{ query.sql }}</pre>{% if query.truncated %}<span>SQL text truncated</span>{% endif %}</td><td>{{ query.durationMilliseconds|number_format(3) }}</td><td>{{ query.operation }}</td><td>{{ query.failed ? 'error' : 'ok' }}{% if query.sqlState %} ({{ query.sqlState }}){% endif %}</td></tr>
-        {% else %}<tr><td colspan="5">No SQL queries recorded.</td></tr>{% endfor %}
-        </tbody></table>
-        <h3>Repeated SQL</h3>
-        <p class="help">Exact SQL text repeated within the retained sample, including queries with different bound values. This can help investigate N+1, but repetitions alone do not prove it.</p>
-        <table><thead><tr><th>SQL</th><th>Count</th><th>Total time (ms)</th></tr></thead><tbody>
-        {% for query in collector.repeatedQueries %}<tr><td><pre>{{ query.sql }}</pre></td><td>{{ query.count }}</td><td>{{ query.durationMilliseconds|number_format(3) }}</td></tr>
-        {% else %}<tr><td colspan="3">No repeated SQL in retained entries.</td></tr>{% endfor %}
-        </tbody></table>
-    {% else %}<p>SQL text collection is disabled. Enable <code>modernorm.profiler.collect_sql</code> to collect it during profiled requests.</p>{% endif %}
-    <h3>Batch fetching</h3>
-    <table><thead><tr><th>Association kind</th><th>Groups</th><th>References</th><th>Collections</th><th>Time (ms)</th><th>Errors</th></tr></thead><tbody>
-    {% for kind, batch in stats.batch.byKind %}
-        <tr><td>{{ kind }}</td><td>{{ batch.count }}</td><td>{{ batch.selectedReferences }}</td><td>{{ batch.selectedCollections }}</td><td>{{ batch.timeMilliseconds|number_format(3) }}</td><td>{{ batch.errors }}</td></tr>
-    {% else %}<tr><td colspan="6">No batch groups recorded.</td></tr>{% endfor %}
-    </tbody></table>
-    <h3>Batch fallback decisions</h3>
-    <table><thead><tr><th>Reason</th><th>Count</th></tr></thead><tbody>
-    {% for reason, count in stats.batch.fallbackCounts %}<tr><td>{{ reason }}</td><td>{{ count }}</td></tr>
-    {% else %}<tr><td colspan="2">No fallback decisions recorded.</td></tr>{% endfor %}
-    </tbody></table>
-    <h3>L2 entity cache</h3>
-    {% if collector.l2.enabled %}
-    <table><thead><tr><th>Hits</th><th>Misses</th><th>Puts</th><th>Evictions</th></tr></thead><tbody><tr><td>{{ collector.l2.hits }}</td><td>{{ collector.l2.misses }}</td><td>{{ collector.l2.puts }}</td><td>{{ collector.l2.evictions }}</td></tr></tbody></table>
-    {% else %}<p>L2 cache is not configured.</p>{% endif %}
-    <h3>Operation history</h3>
-    <p class="help">Bounded completion events; These core events contain no SQL text, parameters or identifiers; optional SQL details are listed separately above. Events appear in completion order. Batch fallback events describe a decision with zero duration.</p>
-    {% if collector.dropped %}<p class="status-warning">{{ collector.dropped }} events omitted because the history limit was reached. Aggregate counters remain complete.</p>{% endif %}
-    <table><thead><tr><th>Operation</th><th>Association</th><th>Time (ms)</th><th>Configured size</th><th>Selected refs / collections</th><th>Batch L2 hit / miss / put</th><th>Result</th></tr></thead><tbody>
-    {% for event in collector.events %}<tr>
-        <td>{{ event.kind.value }}{% if event.batchKind %} / {{ event.batchKind.value }}{% endif %}</td>
-        <td>{{ event.association ?? event.entityClass ?? '—' }}</td>
-        <td>{{ (event.durationNanoseconds / 1000000)|number_format(3) }}</td>
-        <td>{{ event.configuredSize ?: '—' }}</td>
-        <td>{{ event.selectedReferences }} / {{ event.selectedCollections }}</td>
-        <td>{{ event.cacheHits }} / {{ event.cacheMisses }} / {{ event.cachePuts }}</td>
-        <td>{{ event.fallbackReason ? event.fallbackReason.value : (event.failed ? 'error' : 'ok') }}</td>
-    </tr>{% else %}<tr><td colspan="7">No events recorded.</td></tr>{% endfor %}
-    </tbody></table>
-    <p>Observer errors: {{ stats.observerErrors }}. Exporter failures do not interrupt ORM operations.</p>
 {% endblock %}

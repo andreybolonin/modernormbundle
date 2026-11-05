@@ -1,0 +1,17 @@
+{% import '@ModernORM/Collector/_macros.html.twig' as ui %}
+<h3>Hydration</h3>
+{% if metrics.hydration is null %}{{ ui.unavailable('Hydration') }}{% else %}
+    {% set hydration = metrics.hydration %}
+    <div class="morm-metrics morm-five">
+        {{ ui.metric('Hydration attempts', hydration.count, '', 'activity') }}
+        {{ ui.metric('Input rows', hydration.rows, '', 'rows') }}
+        {{ ui.metric('New entity instances', hydration.entitiesCreated, '', 'layers') }}
+        {{ ui.metric('Active hydration time', hydration.timeMs|number_format(3), 'ms', 'clock') }}
+        {{ ui.metric('Incomplete attempts', hydration.incomplete, '', 'activity') }}
+    </div>
+    <div class="morm-box"><h4>Hydration by hydrator · retained events</h4><div class="morm-table"><table><thead><tr><th>Hydrator</th><th class="morm-num">Attempts</th><th class="morm-num">Rows</th><th class="morm-num">New instances</th><th class="morm-num">Time (ms)</th><th class="morm-num">Incomplete</th></tr></thead><tbody>
+        {% for group in collector.hydrationGroups %}<tr><td class="morm-monospace">{{ group.hydrator }}</td><td class="morm-num">{{ group.count }}</td><td class="morm-num">{{ group.rows }}</td><td class="morm-num">{{ group.entitiesCreated }}</td><td class="morm-num">{{ group.timeMs|number_format(3) }}</td><td class="morm-num">{{ group.incomplete }}</td></tr>{% else %}<tr><td colspan="6">No hydration events retained.</td></tr>{% endfor %}
+    </tbody></table></div></div>
+    <div class="morm-columns"><div class="morm-box"><h4>What is measured</h4><p>Input rows and newly reconstituted instances are different: joins can repeat rows, and Identity Map hits reuse existing objects.</p><p class="morm-note">Streaming active time excludes consumer code between yields. An abandoned stream is incomplete, and is an error only if fetching, conversion or cleanup failed.</p></div>
+    <div class="morm-box"><h4>Coverage</h4><dl class="morm-dl"><dt>Hydration errors</dt><dd>{{ hydration.errors }}</dd><dt>Per-entity class breakdown</dt><dd>Not collected</dd><dt>Hydration peak memory</dt><dd>Not collected</dd></dl><p class="morm-note">No per-class distribution or memory values are inferred from the number of new objects.</p></div></div>
+{% endif %}

@@ -5,7 +5,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.4",
-        "andreybolonin/modernorm": "^0.1@beta",
+        "andreybolonin/modernorm": "^0.1.0-beta.3",
         "symfony/framework-bundle": "^7.4 || ^8.0",
         "symfony/cache": "^7.4 || ^8.0",
         "symfony/service-contracts": "^3.5",
@@ -25,7 +25,8 @@
         "symfony/web-profiler-bundle": "Displays ModernORM metrics in the Symfony toolbar and Profiler.",
         "symfony/twig-bundle": "Renders the ModernORM Profiler panel.",
         "doctrine/migrations": "Enables optional ModernORM migration commands.",
-        "doctrine/data-fixtures": "Enables optional fixture loading."
+        "doctrine/data-fixtures": "Enables optional fixture loading.",
+        "open-telemetry/api": "Records ModernORM operation metrics with the optional OpenTelemetry adapter; configure a MeterProvider in your application."
     },
     "autoload": {
         "psr-4": {
@@ -71,7 +72,9 @@
             "/vendor",
             "/var",
             "/.env",
-            "/.env.*"
+            "/.env.*",
+            "/examples/observability/vendor",
+            "/examples/observability/.runtime"
         ]
     }
 }

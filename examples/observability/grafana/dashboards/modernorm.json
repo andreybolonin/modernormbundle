@@ -1,0 +1,347 @@
+{
+  "uid": "modernorm-operations",
+  "title": "ModernORM Operations",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "tags": [
+    "modernorm",
+    "prototype"
+  ],
+  "timezone": "browser",
+  "refresh": "5s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "runtime",
+        "type": "custom",
+        "query": "fpm,worker",
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "SQL operations / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "modernorm-vm"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (rate(modernorm_operations_total{job=\"modernorm-otel-prototype\",operation=\"sql\",modernorm_runtime=~\"$runtime\"}[$__rate_interval]))",
+          "legendFormat": "{{outcome}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "modernorm-vm"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "SQL duration p95",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "modernorm-vm"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(modernorm_operation_duration_seconds_bucket{job=\"modernorm-otel-prototype\",operation=\"sql\",modernorm_runtime=~\"$runtime\"}[$__rate_interval])))",
+          "legendFormat": "p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "modernorm-vm"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Operation attempts / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "modernorm-vm"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (operation) (rate(modernorm_operations_total{job=\"modernorm-otel-prototype\",modernorm_runtime=~\"$runtime\"}[$__rate_interval]))",
+          "legendFormat": "{{operation}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "modernorm-vm"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Bulk affected rows / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "modernorm-vm"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (bulk_operation) (rate(modernorm_bulk_rows_total{job=\"modernorm-otel-prototype\",row_kind=\"affected\",modernorm_runtime=~\"$runtime\"}[$__rate_interval]))",
+          "legendFormat": "{{bulk_operation}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "modernorm-vm"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Average selected batch size",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "modernorm-vm"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (association_kind) (rate(modernorm_batch_size_sum{job=\"modernorm-otel-prototype\",modernorm_runtime=~\"$runtime\"}[$__rate_interval])) / sum by (association_kind) (rate(modernorm_batch_size_count{job=\"modernorm-otel-prototype\",modernorm_runtime=~\"$runtime\"}[$__rate_interval]))",
+          "legendFormat": "{{association_kind}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "modernorm-vm"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "New hydrated entities / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "modernorm-vm"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(modernorm_hydration_entities_total{job=\"modernorm-otel-prototype\",modernorm_runtime=~\"$runtime\"}[$__rate_interval]))",
+          "legendFormat": "entities",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "modernorm-vm"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Observed managed entities p95",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "modernorm-vm"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le,phase) (rate(modernorm_unit_of_work_managed_bucket{job=\"modernorm-otel-prototype\",modernorm_runtime=~\"$runtime\"}[$__rate_interval])))",
+          "legendFormat": "{{phase}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "modernorm-vm"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "SQL cumulative count by writer \u00b7 resets on Collector restart",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "modernorm-vm"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (instance) (modernorm_operations_total{job=\"modernorm-otel-prototype\",operation=\"sql\",modernorm_runtime=~\"$runtime\"})",
+          "legendFormat": "{{instance}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "modernorm-vm"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    }
+  ],
+  "description": "Local OTLP prototype. Sources preserve worker identity. Apply rate before summing counters. Scopes overlap; times must not be added. No L2 export or traces in this first slice."
+}

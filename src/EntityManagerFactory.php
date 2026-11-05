@@ -51,7 +51,10 @@ final class EntityManagerFactory implements \Symfony\Contracts\Service\ResetInte
             }
         } finally {
             $this->connection->close();
-            $reflection->resetAsLazyProxy($this->manager, $this->initializer());
+            // A second reset may arrive before another request/job initializes the proxy.
+            if (!$reflection->isUninitializedLazyObject($this->manager)) {
+                $reflection->resetAsLazyProxy($this->manager, $this->initializer());
+            }
         }
     }
 }

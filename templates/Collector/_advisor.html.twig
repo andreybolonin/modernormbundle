@@ -1,0 +1,20 @@
+{% import '@ModernORM/Collector/_macros.html.twig' as ui %}
+{% set findings = collector.findings %}
+{% if active != 'overview' %}{% set findings = findings|filter(f => f.tab == active) %}{% endif %}
+<section class="morm-box" id="performance-advisor" aria-labelledby="morm-advisor-title">
+    <div class="morm-section-title"><h3 class="morm-advisor-title" id="morm-advisor-title">{{ ui.icon('activity') }} Performance Advisor <span class="morm-badge">{{ findings|length }} findings</span></h3>{% if active != 'overview' %}<a href="{{ path('_profiler', {token: token, panel: 'modernorm', modernorm_tab: 'overview'}) }}#performance-advisor">All findings</a>{% endif %}</div>
+    <p class="morm-note">Recommendations describe this saved request and its retained sample. They do not run SQL or predict a percentage speedup.</p>
+    {% if not collector.advisorEnabled %}
+        <p class="morm-note">Advisor was not collected. Enable Statistics and the Profiler advisor, then capture a new request.</p>
+    {% else %}
+        {% for finding in findings %}
+            <article class="morm-finding" data-finding="{{ finding.id }}">
+                <span class="morm-severity-{{ finding.severity }}" aria-label="{{ finding.severity }}">{{ ui.icon('alert') }}</span>
+                <div><strong>{{ finding.title }}</strong><p>{{ finding.evidence }}</p></div>
+                <div><strong>Recommendation</strong><p>{{ finding.recommendation }}</p></div>
+                <a class="morm-button" href="{{ path('_profiler', {token: token, panel: 'modernorm', modernorm_tab: finding.tab}) }}{{ finding.query is not null ? '#morm-query-' ~ finding.query : '' }}">Inspect {{ tabs[finding.tab] }}</a>
+            </article>
+        {% else %}<p>No findings above the configured thresholds in the available data.</p>{% endfor %}
+        {% if not collector.sqlEnabled %}<p class="morm-note">SQL-based rules are unavailable because SQL text history was not collected.</p>{% endif %}
+    {% endif %}
+</section>
