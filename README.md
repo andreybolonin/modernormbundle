@@ -224,3 +224,7 @@ MODERNORM_TEST_URL='postgresql://user:password@127.0.0.1/modernorm_test' compose
 PostgreSQL tests execute real ORM INSERT/UPDATE/DELETE, association loading for all three batch kinds, entity L2 miss/put/hit and UPDATE invalidation, and a failed flush followed by Messenger reset. They use connection-local temporary tables and isolated random schemas in the designated test database. Existing application tables are not changed.
 
 Functional tests boot a standalone Symfony kernel and verify persisted profiles, rendered panels and worker reset. The [migration/fixture example](examples/migrations-fixtures/README.md) exercises an empty PostgreSQL schema end to end.
+
+## Core compatibility verification
+
+The normal dependency matrix tests the published core constraint. A separate [pinned-core compatibility matrix](tools/core-compatibility/README.md) runs the full bundle suite and real bulk SoftDelete/restore checks for saved Profiler views and OpenTelemetry metrics on PHP 8.4/8.5, without requiring an unreleased core for ordinary installations.

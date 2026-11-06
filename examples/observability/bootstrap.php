@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 // The example owns its SDK dependencies; the bundle and core remain independent.
 require __DIR__.'/vendor/autoload.php';
+require dirname(__DIR__, 2).'/vendor/autoload.php';
 $corePath = getenv('MODERNORM_CORE_PATH');
 if ($corePath !== false && $corePath !== '') {
     if (!is_file($corePath.'/src/Statistics/OperationEvent.php')) { throw new RuntimeException('MODERNORM_CORE_PATH must point to a ModernORM checkout.'); }
@@ -12,9 +13,8 @@ if ($corePath !== false && $corePath !== '') {
             $path = $corePath.'/src/'.str_replace('\\', '/', substr($class, 10)).'.php';
             if (is_file($path)) { require $path; }
         }
-    });
+    }, true, true);
 }
-require dirname(__DIR__, 2).'/vendor/autoload.php';
 spl_autoload_register(static function (string $class): void {
     $prefix = 'ModernORM\\Bundle\\Example\\Observability\\';
     if (str_starts_with($class, $prefix)) {

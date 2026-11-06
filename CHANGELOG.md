@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Verify real core soft_delete/restore events in saved Profiler views and OpenTelemetry counters/histograms, including zero-row/failure outcomes. Add a pinned-core PHP 8.4/8.5 CI matrix and correct development core-override autoloader precedence.
+
 - Add configurable Advisor hints for repeated successful flushes and association/target-specific size-one fallbacks and one-item batches, with explicit retained-event coverage and aggregate fallback behavior.
 
 - Add optional global L2 OpenTelemetry counters through tagged cache loggers, independently of Statistics/Profiler resets; isolate logger callback failures and bound entity labels with an explicit allowlist. Extend the OTLP example, Grafana panels and lifecycle/SDK verification.
