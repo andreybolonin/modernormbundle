@@ -8,13 +8,21 @@
         {{ ui.metric('Write phase', work.phases.writes.timeMs|number_format(3), 'ms', 'database') }}
         {{ ui.metric('Commit phase', work.phases.commit.timeMs|number_format(3), 'ms', 'clock') }}
     </div>
+    <div class="morm-box"><h4>Executed SQL writes · request totals</h4>
+        {% if metrics.dml is null %}{{ ui.unavailable('Executed DML') }}{% else %}
+        <div class="morm-table"><table><thead><tr><th>Operation</th><th class="morm-num">Successful statements</th><th class="morm-num">Failed attempts</th><th class="morm-num">Known affected rows</th><th class="morm-num">Unknown row counts</th><th class="morm-num">Time (ms)</th></tr></thead><tbody>
+            {% for operation, value in metrics.dml %}<tr><td>{{ operation|upper }}</td><td class="morm-num">{{ value.succeeded }}</td><td class="morm-num">{{ value.errors }}</td><td class="morm-num">{{ value.affectedRows }}</td><td class="morm-num">{{ value.unknownRowCounts }}</td><td class="morm-num">{{ value.timeMs|number_format(3) }}</td></tr>{% endfor %}
+        </tbody></table></div>
+        <p class="morm-note">Client SQL execution, not entity counts or committed changes. Includes ordinary flush and bulk statements; UPDATE can affect zero rows. A later rollback does not erase a successful execution. CTEs, COPY and multi-statement SQL are not classified; they remain in SQL totals. Timings overlap SQL/flush/bulk totals.</p>
+        {% endif %}
+    </div>
     <div class="morm-columns">
         <div class="morm-box"><h4>Flush phases</h4><table><thead><tr><th>Phase</th><th class="morm-num">Attempts</th><th class="morm-num">Time (ms)</th><th class="morm-num">Errors</th></tr></thead><tbody>
             {% for key, label in {change_sets: 'Calculate change sets', writes: 'Execute writes', commit: 'DBAL commit'} %}{% set phase = work.phases[key] %}<tr><td>{{ label }}</td><td class="morm-num">{{ phase.count }}</td><td class="morm-num">{{ phase.timeMs|number_format(3) }}</td><td class="morm-num">{{ phase.errors }}</td></tr>{% endfor %}
         </tbody></table><p class="morm-note">An empty flush has no write/commit phase. Successful commit can be a savepoint release in a caller-owned transaction; it does not always mean final commit.</p></div>
-        <div class="morm-box"><h4>Last planned write set</h4><dl class="morm-dl">
+        <div class="morm-box"><details><summary>Last planned write set</summary><dl class="morm-dl">
             {% for key, label in {insertions: 'Entity insertions', updates: 'Entity updates', deletions: 'Entity deletions', collectionUpdates: 'Collection updates', collectionDeletions: 'Collection deletions', extraUpdates: 'Extra updates'} %}<dt>{{ label }}</dt><dd>{{ work.lastWrites[key] ?? '—' }}</dd>{% endfor %}
-        </dl><p class="morm-note">Scheduled operations at the last write-phase boundary, not executed SQL row totals. Entity identifiers and individual DML timings are not recorded.</p></div>
+        </dl><p class="morm-note">Scheduled operations at the last write-phase boundary, not executed SQL row totals. Entity identifiers and individual entity timings are not recorded.</p></details></div>
     </div>
     <div class="morm-box"><h4>Retained phase events</h4><div class="morm-table"><table><thead><tr><th>Phase</th><th class="morm-num">Managed</th><th class="morm-num">Planned I / U / D</th><th class="morm-num">Collections U / D</th><th class="morm-num">Time (ms)</th><th>Result</th></tr></thead><tbody>
         {% for event in collector.eventRows('unit_of_work') %}{% if event.unitOfWork %}<tr><td>{{ event.unitOfWork.phase }}</td><td class="morm-num">{{ event.unitOfWork.managedEntities }}</td><td class="morm-num">{{ event.unitOfWork.insertions }} / {{ event.unitOfWork.updates }} / {{ event.unitOfWork.deletions }}</td><td class="morm-num">{{ event.unitOfWork.collectionUpdates }} / {{ event.unitOfWork.collectionDeletions }}</td><td class="morm-num">{{ event.timeMs|number_format(3) }}</td><td>{{ ui.outcome(event.failed) }}</td></tr>{% endif %}{% else %}<tr><td colspan="6">No phase events retained. Aggregate phase metrics remain available above.</td></tr>{% endfor %}

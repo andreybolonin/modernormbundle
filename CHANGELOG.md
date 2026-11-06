@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Show request-wide executed DML instead of planned queues on the Profiler summary; add DML statement/row/duration OTLP instruments and Grafana panels, preserving unavailable states for older cores/profiles.
+
 - Add PHPStan level 5 and PHP-CS-Fixer PSR-12 Composer/CI checks for source, tests, tools and examples; fix type contracts and format existing PHP without a baseline.
 
 - Shorten the README into a feature overview and quick start; move detailed setup, Profiler/Advisor, monitoring, migrations, fixtures and validation contracts into linked documentation.

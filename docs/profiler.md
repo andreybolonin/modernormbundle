@@ -4,7 +4,7 @@
 
 The toolbar shows SQL count/time, flush and batch counts, L2 hits/misses and Advisor findings. Eight tabs provide a request dashboard, query history, UnitOfWork phases, hydration, batch groups, entity L2 counters, bulk outcomes and PostgreSQL context. Completion history is bounded and stored with the profile.
 
-History is recorded only during HTTP requests while Symfony's Profiler is enabled. The history limit does not limit aggregate counters. Core operation events contain no SQL text, bindings, identifiers or exception messages. SQL timing excludes fetching/hydration; batch and flush timings overlap SQL time. Bulk SQL is included in SQL totals. When the core exposes extended operation events, separate bulk, hydration and UnitOfWork metrics are displayed. Older saved profiles display explicit unavailable states for missing metrics. UnitOfWork write counts describe scheduled work, not executed DML totals.
+History is recorded only during HTTP requests while Symfony's Profiler is enabled. The history limit does not limit aggregate counters. Core operation events contain no SQL text, bindings, identifiers or exception messages. SQL timing excludes fetching/hydration; batch and flush timings overlap SQL time. Bulk SQL is included in SQL totals. When the core exposes extended operation events, separate bulk, hydration and UnitOfWork metrics are displayed. Older saved profiles display explicit unavailable states for missing metrics. UnitOfWork planned counts remain diagnostic; the request summary uses executed DML counters when available.
 
 Enable `modernorm.profiler.collect_sql: true` for a query list containing SQL text, duration, driver method and error SQLSTATE. This is a separate DBAL middleware in the bundle; the core Statistics API remains unchanged. Collection requires an active profiled HTTP request and works independently of aggregate Statistics being enabled. With `collect_sql: false`, the SQL middleware is not installed.
 
@@ -84,3 +84,11 @@ Review bulk INSERT, UPDATE and DELETE calls, affected rows, persistence-context 
 </details>
 
 Screenshots show the local implementation running a PostgreSQL demonstration workload with real bulk operations and deliberately repeated reference lookups. Figures are illustrative, not benchmark results. Extended bulk, hydration and UnitOfWork metrics require a core version exposing the corresponding operation events; older saved profiles show unavailable metrics explicitly when fields are absent. EXPLAIN plans and buffer statistics are not collected. See the [capture notes](screenshots/symfony-profiler/README.md).
+
+## Executed INSERT / UPDATE / DELETE
+
+The request summary shows successful client SQL statements across the entire request, replacing the last-flush planned insert/update/delete cards. UnitOfWork includes a separate executed-DML table with successful statements, failed attempts, known affected rows, unknown row counts and execution time. The planned queue remains in a collapsed diagnostic section.
+
+A multi-row INSERT is one successful statement and multiple affected rows. A zero-row UPDATE is a successful statement with zero affected rows. A later rollback does not erase execution, and success does not claim commit. Ordinary ORM writes and bulk SQL share the same driver counters; do not add DML, SQL, flush or bulk timings.
+
+The core classifies single direct INSERT/UPDATE/DELETE. CTEs, COPY, multiple statements and unclassified native SQL stay SQL-only; server-side trigger/cascade work is not additional client SQL. UPSERT is classified as INSERT and SoftDelete/restore as UPDATE. No raw SQL parsing in the panel infers counts from the optional retained history. Aggregate DML survives event-history limits. Older cores and older serialized profiles display unavailable DML, never substitute planned operations.

@@ -10,11 +10,11 @@ The optional OpenTelemetry adapters record ORM operation and global entity L2 me
 ModernORM → OpenTelemetry PHP SDK → OTLP/HTTP → Collector → VictoriaMetrics → Grafana
 ```
 
-The [runnable example](../examples/observability/README.md) includes pinned SDK/Collector/backend dependencies, a provisioned datasource and eleven Grafana panels. It also exposes a Prometheus-compatible Collector endpoint. It is a local prototype with documented best-effort delivery, not an automatically configured production monitoring service.
+The [runnable example](../examples/observability/README.md) includes pinned SDK/Collector/backend dependencies, a provisioned datasource and fourteen Grafana panels. It also exposes a Prometheus-compatible Collector endpoint. It is a local prototype with documented best-effort delivery, not an automatically configured production monitoring service.
 
 | Adapter | Provides | Service tag |
 | --- | --- | --- |
-| `OperationMetrics` | SQL, flush, batch, bulk, hydration and UnitOfWork counts/durations, row counters and fallback decisions | `modernorm.statistics_observer` |
+| `OperationMetrics` | SQL and executed DML, flush, batch, bulk, hydration and UnitOfWork counts/durations, row counters and fallback decisions | `modernorm.statistics_observer` |
 | `CacheMetrics` | Global entity L2 hits, misses, puts and ORM invalidations with explicit entity aliases | `modernorm.cache_logger` |
 | `FlushMetrics` | SDK flush boundaries for HTTP termination, console and Messenger success/failure | `kernel.event_subscriber` |
 

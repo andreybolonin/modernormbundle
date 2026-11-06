@@ -14,8 +14,8 @@ ModernORMBundle brings [ModernORM](https://github.com/andreybolonin/modernorm), 
 | --- | --- |
 | **[Performance Advisor](docs/profiler.md#performance-advisor)** | Investigate repeated SQL, slow queries, frequent flushes, costly hydration and one-item batches using measured evidence and links to the relevant panel. |
 | **[Symfony Profiler](docs/profiler.md)** | Explore eight saved-profile tabs: Overview, Queries, UnitOfWork, Hydration, Batch Fetching, L2 Cache, Bulk Operations and PostgreSQL. |
-| **[OpenTelemetry / OTLP export](docs/observability.md)** | Export SQL/flush/batch/bulk timings, hydration and global L2 activity through the application's MeterProvider and OTLP exporter. |
-| **[Grafana dashboard + VictoriaMetrics](examples/observability/README.md)** | Start a runnable Collector → VictoriaMetrics → Grafana example with eleven provisioned panels for rates, latency, batching and cache reuse. |
+| **[OpenTelemetry / OTLP export](docs/observability.md)** | Export SQL/DML/flush/batch/bulk timings, hydration and global L2 activity through the application's MeterProvider and OTLP exporter. |
+| **[Grafana dashboard + VictoriaMetrics](examples/observability/README.md)** | Start a runnable Collector → VictoriaMetrics → Grafana example with fourteen provisioned panels for rates, latency, batching and cache reuse. |
 | **[Batch and L2 visibility](docs/profiler.md)** | See association groups, selected batch sizes, fallback decisions and entity-cache hits, misses, puts and invalidations. |
 | **[Symfony services and workers](docs/getting-started.md)** | Inject the EntityManager, DBAL connection and Statistics; reset ORM state between requests and Messenger jobs. |
 | **[Migrations](docs/migrations.md) and [fixtures](docs/fixtures.md)** | Use dedicated console commands, schema ownership filters, constructor-injected fixtures, groups and references. |

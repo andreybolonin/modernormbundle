@@ -60,7 +60,7 @@ final class DataCollector extends BaseCollector
     }
     public function getMetrics(): array
     {
-        return $this->data['metrics'] ?? ProfileView::metrics($this->getSnapshot(), $this->getEvents());
+        return ($this->data['metrics'] ?? ProfileView::metrics($this->getSnapshot(), $this->getEvents())) + ['dml' => null];
     }
     public function getRuntime(): array
     {

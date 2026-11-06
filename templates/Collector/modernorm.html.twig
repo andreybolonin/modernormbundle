@@ -43,9 +43,9 @@
             {{ ui.metric('Advisor findings', collector.findings|length, '', 'alert', profileLink ~ '#performance-advisor') }}
             {{ ui.metric('New hydrated entities', metrics.hydration is null ? null : metrics.hydration.entitiesCreated, '', 'rows', profileLink ~ '&modernorm_tab=hydration') }}
             {{ ui.metric('Batch loads', metrics.batch.count, '', 'layers', profileLink ~ '&modernorm_tab=batch') }}
-            {{ ui.metric('Planned inserts · last write phase', metrics.unitOfWork.lastWrites.insertions ?? null, '', 'rows', profileLink ~ '&modernorm_tab=unitofwork') }}
-            {{ ui.metric('Planned updates · last write phase', metrics.unitOfWork.lastWrites.updates ?? null, '', 'rows', profileLink ~ '&modernorm_tab=unitofwork') }}
-            {{ ui.metric('Planned deletes · last write phase', metrics.unitOfWork.lastWrites.deletions ?? null, '', 'rows', profileLink ~ '&modernorm_tab=unitofwork') }}
+            {{ ui.metric('Executed INSERTs', metrics.dml is null ? null : metrics.dml.insert.succeeded, '', 'rows', profileLink ~ '&modernorm_tab=unitofwork') }}
+            {{ ui.metric('Executed UPDATEs', metrics.dml is null ? null : metrics.dml.update.succeeded, '', 'rows', profileLink ~ '&modernorm_tab=unitofwork') }}
+            {{ ui.metric('Executed DELETEs', metrics.dml is null ? null : metrics.dml.delete.succeeded, '', 'rows', profileLink ~ '&modernorm_tab=unitofwork') }}
             {{ ui.metric('Flushes', metrics.flush.count, '', 'activity', profileLink ~ '&modernorm_tab=unitofwork') }}
             {{ ui.metric('Flush time', metrics.flush.timeMs|number_format(2), 'ms', 'clock', profileLink ~ '&modernorm_tab=unitofwork') }}
             {{ ui.metric('Hydration active time', metrics.hydration is null ? null : metrics.hydration.timeMs|number_format(2), 'ms', 'clock', profileLink ~ '&modernorm_tab=hydration') }}

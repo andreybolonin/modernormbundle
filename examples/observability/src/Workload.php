@@ -83,6 +83,6 @@ final class Workload
         } catch (\Doctrine\DBAL\Exception) {
         }
         $snapshot = $this->statistics->snapshot();
-        return ['pid' => getmypid(), 'sql' => $snapshot->sqlCount, 'sqlErrors' => $snapshot->sqlErrors, 'flush' => $snapshot->flushCount, 'batch' => $snapshot->batch->count, 'bulk' => $snapshot->bulk->count, 'observerErrors' => $snapshot->observerErrors, 'l2' => ['hit' => $this->cache->getHitCount(), 'miss' => $this->cache->getMissCount(), 'put' => $this->cache->getPutCount(), 'invalidation' => $this->cache->getEvictionCount()]];
+        return ['pid' => getmypid(), 'sql' => $snapshot->sqlCount, 'sqlErrors' => $snapshot->sqlErrors, 'flush' => $snapshot->flushCount, 'batch' => $snapshot->batch->count, 'bulk' => $snapshot->bulk->count, 'dml' => \ModernORM\Bundle\Profiler\ProfileView::metrics($snapshot)['dml'], 'observerErrors' => $snapshot->observerErrors, 'l2' => ['hit' => $this->cache->getHitCount(), 'miss' => $this->cache->getMissCount(), 'put' => $this->cache->getPutCount(), 'invalidation' => $this->cache->getEvictionCount()]];
     }
 }

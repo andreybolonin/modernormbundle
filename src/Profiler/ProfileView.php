@@ -53,7 +53,16 @@ final class ProfileView
             }
             $work = ['phases' => $phases, 'observedManagedMax' => $managed === [] ? null : max($managed), 'lastWrites' => $phases['writes']['last']];
         }
+        $dml = null;
+        if (isset($s['dml'])) {
+            $dml = [];
+            foreach (['insert', 'update', 'delete'] as $operation) {
+                $values = $s['dml'][$operation];
+                $dml[$operation] = $timed($values) + ['succeeded' => $values['count'] - $values['errors']];
+            }
+        }
         return [
+            'dml' => $dml,
             'sql' => ['count' => $s['sqlCount'], 'errors' => $s['sqlErrors'], 'timeMs' => $s['sqlTimeNanoseconds'] / 1_000_000],
             'flush' => ['count' => $s['flushCount'], 'errors' => $s['flushErrors'], 'timeMs' => $s['flushTimeNanoseconds'] / 1_000_000],
             'batch' => $batch,

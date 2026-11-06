@@ -23,7 +23,7 @@ The last command runs 30 real ORM jobs, one second apart. The workload creates P
 
 Open:
 
-- [Grafana dashboard](http://127.0.0.1:13000/d/modernorm-operations/modernorm-operations) — provisioned VictoriaMetrics datasource and eleven panels, including L2 operations, per-entity hit ratio and invalidations.
+- [Grafana dashboard](http://127.0.0.1:13000/d/modernorm-operations/modernorm-operations) — provisioned VictoriaMetrics datasource and fourteen panels, including L2 operations, per-entity hit ratio and invalidations.
 - [Collector Prometheus endpoint](http://127.0.0.1:18889/metrics).
 - [VictoriaMetrics](http://127.0.0.1:18428/vmui/).
 
@@ -101,6 +101,9 @@ Logger callback exceptions are isolated from ORM/cache work and remaining logger
 
 | OTLP instrument | Type | Meaning |
 | --- | --- | --- |
+| `modernorm.dml.statements` | Counter | Direct DML execution attempts by insert/update/delete and success/error; success is not commit |
+| `modernorm.dml.rows` | Counter | Known affected rows of successful DML; unknown counts omitted |
+| `modernorm.dml.duration` | Histogram, seconds | Direct DML execution duration, overlapping SQL/flush/bulk |
 | `modernorm.operations` | Counter | Completed attempts by operation and success/error outcome |
 | `modernorm.operation.duration` | Histogram, seconds | Duration of SQL, flush, batch, bulk, hydration and UnitOfWork phases |
 | `modernorm.batch.size` | Histogram | Selected references or collections per batch |
@@ -134,3 +137,9 @@ Delivery is **best effort**. A failed delta is not durably queued or replayed. O
 Before production use, resolve deployment/process-generation identity, Collector HA/routing, retry/queue/deduplication policy, failure monitoring and hosting-specific lifecycle behavior. Test long-job checkpoints, process recycling and shutdown paths under the intended hosting environment. The selected Collector's delta-to-cumulative processor is currently classified alpha; the pinned configuration is a validated prototype choice, not a stability guarantee.
 
 References: [OpenTelemetry metric stream model](https://opentelemetry.io/docs/specs/otel/metrics/data-model/), [PHP SDK](https://opentelemetry.io/docs/languages/php/), [delta-to-cumulative processor](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.164.0/processor/deltatocumulativeprocessor).
+
+## Executed DML metrics
+
+On a compatible core, SQL completion events carry optional DML details. The existing observer records a DML statement counter, duration histogram and known affected rows in addition to overall SQL metrics, without creating another SQL completion. Labels are limited to `dml_operation=insert|update|delete` and success/error outcome; row metrics use only the operation. No table/entity/identifier/query labels are added.
+
+Grafana includes successful DML statement rate, known affected-row rate and execution p95 panels. These are executions, not committed changes; rollback is not subtracted. A multi-row INSERT, a zero-row UPDATE and an optimistic-lock failure after successful SQL are therefore distinct from entity lifecycle counts. Unclassified native CTE/COPY/multi-statement SQL remains in SQL totals. Older cores simply have no DML series. With the current core override, `verify.py` compares exported DML statement/row totals with the request snapshots across HTTP and worker boundaries.

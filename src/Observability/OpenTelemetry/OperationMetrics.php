@@ -21,9 +21,15 @@ final class OperationMetrics implements OperationObserver
     private readonly CounterInterface $hydrationRows;
     private readonly CounterInterface $hydrationEntities;
     private readonly HistogramInterface $managed;
+    private readonly CounterInterface $dmlStatements;
+    private readonly CounterInterface $dmlRows;
+    private readonly HistogramInterface $dmlDuration;
 
     public function __construct(MeterInterface $meter)
     {
+        $this->dmlStatements = $meter->createCounter('modernorm.dml.statements', '{statement}', 'Executed direct INSERT/UPDATE/DELETE attempts; success is not commit.');
+        $this->dmlRows = $meter->createCounter('modernorm.dml.rows', '{row}', 'Known affected rows of successful DML; later rollback is not subtracted.');
+        $this->dmlDuration = $meter->createHistogram('modernorm.dml.duration', 's', 'Direct DML execution duration; overlaps SQL and bulk timings.', ['ExplicitBucketBoundaries' => [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5]]);
         $this->operations = $meter->createCounter('modernorm.operations', '{operation}', 'Completed operation attempts; scopes overlap.');
         $this->duration = $meter->createHistogram('modernorm.operation.duration', 's', 'Completed operation duration; scopes overlap.', ['ExplicitBucketBoundaries' => [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5]]);
         $this->batchSize = $meter->createHistogram('modernorm.batch.size', '{reference}', 'Selected references or collections per batch.', ['ExplicitBucketBoundaries' => [1, 2, 4, 8, 16, 32, 64, 128, 256]]);
@@ -55,6 +61,15 @@ final class OperationMetrics implements OperationObserver
         }
         $this->operations->add(1, $attributes);
         $this->duration->record($event->durationNanoseconds / 1_000_000_000, $attributes);
+        $details = get_object_vars($event)['dml'] ?? null;
+        if ($details !== null) {
+            $dml = ['dml_operation' => $details->operation->value, 'outcome' => $event->failed ? 'error' : 'success'];
+            $this->dmlStatements->add(1, $dml);
+            $this->dmlDuration->record($event->durationNanoseconds / 1_000_000_000, $dml);
+            if (!$event->failed && $details->affectedRows !== null) {
+                $this->dmlRows->add($details->affectedRows, ['dml_operation' => $details->operation->value]);
+            }
+        }
         if ($operation === 'batch') {
             $this->batchSize->record($event->selectedReferences + $event->selectedCollections, ['association_kind' => $event->batchKind->value ?? 'unknown']);
         }

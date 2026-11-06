@@ -1,6 +1,6 @@
 # Pinned core compatibility checks
 
-These checks run outside the default suite so the bundle can retain its published minimum core constraint while separately verifying unreleased core behavior. CI checks out core **72eb8128f375bdd6ccee3b60d46ba5c6c0042bb4** and runs the complete bundle suite plus the focused Profiler and SDK tests on PHP 8.4 and 8.5. Update the pin and compatibility evidence together when adopting a newer revision.
+These checks run outside the default suite so the bundle can retain its published minimum core constraint while separately verifying unreleased core behavior. CI checks out core **618407b8128dd83b0aa706fa83831837cca90bef** and runs the complete bundle suite plus the focused Profiler and SDK tests on PHP 8.4 and 8.5. Update the pin and compatibility evidence together when adopting a newer revision.
 
 With the root and observability example dependencies installed:
 
@@ -23,3 +23,7 @@ These SDK tests use the official in-memory exporter. They do not claim a new Col
 Against core `72eb812`: full bundle suite **64 tests / 403 assertions**; saved Profiler check **1 test / 15 assertions** on PHP 8.4 and 8.5; optional SDK suite plus new state-transition check **13 tests / 161 assertions** on PHP 8.5. All passed without skips.
 
 Core Redis verification used isolated Redis 8.10.3 processes and PostgreSQL: **555 tests without skips** on PHP 8.4.27 (ext-redis 6.2.0) and PHP 8.5.12 (ext-redis 6.3.0). Local PHP 8.5's extension was built with phpize and enabled via `conf.d/20-redis.ini`. These local results complement the core's successful Linux PHP 8.4/8.5 locked/latest/lowest matrix on the same revision.
+
+## Executed DML compatibility
+
+Core `618407b` adds request-wide INSERT/UPDATE/DELETE execution aggregates and optional DML details on SQL events. Compatibility checks now verify saved DML tables, rollback/zero-row semantics, absence of planned fallbacks, old serialized snapshots/collectors and distinct DML OTLP counters/rows. Default bundle tests still support the published minimum core, where DML is explicitly unavailable. The new core revision must be available remotely before running its pinned CI job.

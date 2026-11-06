@@ -2,7 +2,7 @@
   "uid": "modernorm-operations",
   "title": "ModernORM Operations",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "editable": false,
   "tags": [
     "modernorm",
@@ -462,6 +462,126 @@
         }
       },
       "description": "ORM logger events only. Invalidation counts include key/class and pre/post-commit calls, not affected rows or Redis memory/TTL evictions."
+    },
+    {
+      "id": 12,
+      "title": "Successful DML statements / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "modernorm-vm"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (dml_operation) (rate(modernorm_dml_statements_total{job=\"modernorm-otel-prototype\",modernorm_runtime=~\"$runtime\",outcome=\"success\"}[$__rate_interval]))",
+          "legendFormat": "{{dml_operation}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "modernorm-vm"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "Client direct INSERT/UPDATE/DELETE statements, including flush and bulk. Success does not imply commit; later rollback is not subtracted. CTE/COPY/multi-statement SQL remains SQL-only."
+    },
+    {
+      "id": 13,
+      "title": "Known DML affected rows / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "modernorm-vm"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (dml_operation) (rate(modernorm_dml_rows_total{job=\"modernorm-otel-prototype\",modernorm_runtime=~\"$runtime\"}[$__rate_interval]))",
+          "legendFormat": "{{dml_operation}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "modernorm-vm"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "Client direct INSERT/UPDATE/DELETE statements, including flush and bulk. Success does not imply commit; later rollback is not subtracted. CTE/COPY/multi-statement SQL remains SQL-only."
+    },
+    {
+      "id": 14,
+      "title": "DML execution duration p95",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "modernorm-vm"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 48,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le,dml_operation) (rate(modernorm_dml_duration_seconds_bucket{job=\"modernorm-otel-prototype\",modernorm_runtime=~\"$runtime\"}[$__rate_interval])))",
+          "legendFormat": "{{dml_operation}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "modernorm-vm"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "Client direct INSERT/UPDATE/DELETE statements, including flush and bulk. Success does not imply commit; later rollback is not subtracted. CTE/COPY/multi-statement SQL remains SQL-only."
     }
   ],
   "description": "Local OTLP prototype. Sources preserve writer identity. Apply rate before summing counters. Scopes overlap; times must not be added. L2 labels use a configured entity allowlist. No backend TTL/memory-eviction metrics or traces."

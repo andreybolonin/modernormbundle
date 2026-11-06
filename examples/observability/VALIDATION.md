@@ -1,5 +1,16 @@
 # Local prototype validation
 
+## Executed DML extension — 2026-11-06
+
+Core `618407b` and the updated bundle passed the real PHP-FPM/CLI → OTLP → Collector → VictoriaMetrics verifier: before restart, 11 scopes / five writers / 282 SQL attempts; after restart, six scopes / five writers / 152 SQL attempts. SQL counts vary with metadata warmup. Direct DML successful-statement and affected-row totals matched request snapshots at Collector and VictoriaMetrics for INSERT, UPDATE and DELETE. Shutdown did not replay the last delta. The explicit Collector outage completed an ORM job in 0.045 s and reported failed export; its interval was not replayed.
+
+The verifier now filters VictoriaMetrics samples by the current phase start time. A series with no new events after Collector restart may otherwise retain its pre-restart backend value; treating it as current data produced a false L2 mismatch. This is verification of interval-local state, not durable delivery across restart.
+
+Grafana provisions 14 panels, including executed DML statement rate, known affected-row rate and execution p95. No new screenshot/visual audit is claimed. SDK regression checks cover successful writes, zero affected rows, SQL failure and rollback. Saved-profile checks also cover older serialized collectors/snapshots without DML fields. Planned UnitOfWork values are not used as executed fallbacks.
+
+Local core regression: **577 tests without skips on PHP 8.4 and PHP 8.5**, including Redis. Bundle suite: **64 tests / 403 assertions** on both the published minimum core and new core. Focused saved-profile compatibility: **4 tests / 26 assertions**. Optional SDK suite plus compatibility tests: **18 tests / 186 assertions**. Core/bundle PHPStan and PSR-12 checks passed.
+
+
 ## Global L2 extension — 2026-11-06
 
 Validated with PHP CLI/FPM 8.5.12, local PostgreSQL, OpenTelemetry PHP SDK 1.16.0 / Metrics API 1.11.0, and the pinned Collector → VictoriaMetrics → Grafana example stack. Symfony Profiler was disabled during end-to-end checks.

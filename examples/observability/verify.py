@@ -60,7 +60,7 @@ def total(samples, name, **labels):
     return sum(value for metric, attrs, value in samples if metric == name and all(attrs.get(k) == v for k, v in labels.items()))
 
 
-def verify_phase(results):
+def verify_phase(results, since=0):
     expected = collections.Counter()
     for result in results:
         assert result['observerErrors'] == 0, result
@@ -81,17 +81,37 @@ def verify_phase(results):
     assert total(samples, 'modernorm_operations_total', operation='batch') == sum(r['batch'] for r in results)
     assert total(samples, 'modernorm_operation_duration_seconds_count', operation='sql') == sql
     assert total(samples, 'modernorm_bulk_rows_total', row_kind='affected') == 72 * len(results)
-    query = 'sum(modernorm_operations_total{service_instance_id=~"' + PREFIX + ':.*",operation="sql"})'
+    def current_series(name, labels=''):
+        selector = name + '{service_instance_id=~"' + PREFIX + ':.*"' + labels + '}'
+        # After Collector restart, VM can retain a series that received no new events.
+        # Compare only samples exported in this phase, not stale pre-restart series.
+        return '(' + selector + ' and (timestamp(' + selector + ') >= ' + str(since) + '))'
+    query = 'sum(' + current_series('modernorm_operations_total', ',operation="sql"') + ')'
     def stored():
         data = json.loads(fetch('http://127.0.0.1:18428/api/v1/query?' + urllib.parse.urlencode({'query': query, 'nocache': '1', 'latency_offset': '1ms'})))
         values = data['data']['result']
         return bool(values) and float(values[0]['value'][1]) == sql
     wait(stored, seconds=45)
+    if all(result.get('dml') is not None for result in results):
+        for operation in ('insert', 'update', 'delete'):
+            expected_statements = sum(result['dml'][operation]['succeeded'] for result in results)
+            expected_rows = sum(result['dml'][operation]['affectedRows'] for result in results)
+            assert total(samples, 'modernorm_dml_statements_total', dml_operation=operation, outcome='success') == expected_statements
+            assert total(samples, 'modernorm_dml_rows_total', dml_operation=operation) == expected_rows
+        for operation in ('insert', 'update', 'delete'):
+            for name, field, labels in [('modernorm_dml_statements_total', 'succeeded', ',outcome="success"'), ('modernorm_dml_rows_total', 'affectedRows', '')]:
+                expected_value = sum(result['dml'][operation][field] for result in results)
+                dml_query = 'sum(' + current_series(name, ',dml_operation="' + operation + '"' + labels) + ')'
+                def dml_stored():
+                    data = json.loads(fetch('http://127.0.0.1:18428/api/v1/query?' + urllib.parse.urlencode({'query': dml_query, 'nocache': '1', 'latency_offset': '1ms'})))
+                    values = data['data']['result']
+                    return bool(values) and float(values[0]['value'][1]) == expected_value
+                wait(dml_stored, seconds=45)
     for operation in ('hit', 'miss', 'put', 'invalidation'):
         expected_l2 = sum(r['l2'][operation] for r in results)
         assert expected_l2 > 0, (operation, results)
         assert total(samples, 'modernorm_l2_operations_total', operation=operation, entity='product') == expected_l2
-    l2_query = 'sum(modernorm_l2_operations_total{service_instance_id=~"' + PREFIX + ':.*"})'
+    l2_query = 'sum(' + current_series('modernorm_l2_operations_total') + ')'
     def l2_stored():
         data = json.loads(fetch('http://127.0.0.1:18428/api/v1/query?' + urllib.parse.urlencode({'query': l2_query, 'nocache': '1', 'latency_offset': '1ms'})))
         values = data['data']['result']
@@ -171,6 +191,7 @@ def main():
     with (runtime / 'worker.log').open('w') as worker_log, (runtime / 'fpm.log').open('w') as fpm_log:
         try:
             worker = subprocess.Popen([PHP, str(ROOT / 'worker.php'), '--interactive'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=worker_log, text=True, env=ENV)
+            before_since = time.time()
             before = [worker_job(worker) for _ in range(3)]
             assert all(r['exported'] for r in before)
             assert len({r['pid'] for r in before}) == 1
@@ -189,7 +210,7 @@ def main():
                 http_before = list(pool.map(lambda _: fpm_request(port), range(8)))
             assert len({r['pid'] for r in http_before}) == 4, http_before
             before += http_before
-            verify_phase(before)
+            verify_phase(before, before_since)
             # Outage is explicit: delivery is best effort and not replayed on recovery.
             subprocess.run(COMPOSE + ['stop', 'collector'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             collector_stopped = True
@@ -202,19 +223,20 @@ def main():
             subprocess.run(COMPOSE + ['start', 'collector'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             collector_stopped = False
             wait(lambda: fetch('http://127.0.0.1:18889/metrics') is not None)
+            after_since = time.time()
             after = [worker_job(worker) for _ in range(2)]
             assert all(r['exported'] for r in after)
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
                 http_after = list(pool.map(lambda _: fpm_request(port), range(4)))
             assert {r['pid'] for r in http_after} == {r['pid'] for r in http_before}, 'Expected the same four FPM writers after recovery'
             after += http_after
-            verify_phase(after)
+            verify_phase(after, after_since)
             worker.stdin.write('quit\n'); worker.stdin.flush(); worker.wait(timeout=10)
             # Shutdown must not double count the last already-flushed job.
-            verify_phase(after)
+            verify_phase(after, after_since)
             data = json.loads(fetch('http://127.0.0.1:13000/api/dashboards/uid/modernorm-operations'))
             assert data['dashboard']['title'] == 'ModernORM Operations'
-            assert len(data['dashboard']['panels']) == 11
+            assert len(data['dashboard']['panels']) == 14
             print('PASS: real FPM concurrency, persistent jobs, resets, bounded outage, Collector restart, OTLP/VM totals, histograms, global L2 counters and Grafana provisioning.', flush=True)
         finally:
             if worker is not None and worker.poll() is None:
