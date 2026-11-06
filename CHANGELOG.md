@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add optional global L2 OpenTelemetry counters through tagged cache loggers, independently of Statistics/Profiler resets; isolate logger callback failures and bound entity labels with an explicit allowlist. Extend the OTLP example, Grafana panels and lifecycle/SDK verification.
+
 - Rank Performance Advisor findings by severity and measured duration, disclose incomplete SQL samples, and add configurable hydration time/entity-count diagnostics with focused regression coverage.
 
 ## 0.1.0-beta.3 — 2026-11-05

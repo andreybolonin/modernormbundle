@@ -45,13 +45,16 @@ final class ModernORMExtension extends Extension
         $container->setAlias(Statistics::class, 'modernorm.statistics');
         $container->register('modernorm.cache_logger', StatisticsCacheLogger::class)->addTag('kernel.reset', ['method' => 'reset']);
         $container->setAlias(StatisticsCacheLogger::class, 'modernorm.cache_logger');
+        $container->register('modernorm.cache_logger_dispatcher', \ModernORM\Bundle\Observability\CacheLoggerDispatcher::class)
+            ->setArguments([$ref('modernorm.cache_logger'), new TaggedIteratorArgument('modernorm.cache_logger')]);
+        $container->setAlias(\ModernORM\Bundle\Observability\CacheLoggerDispatcher::class, 'modernorm.cache_logger_dispatcher');
         $container->register('modernorm.connection', Connection::class)->setFactory([ConnectionFactory::class, 'create'])
             ->setArguments([$config['url'], $config['server_version'], $ref('modernorm.statistics'), $ref('modernorm.profiler.sql_history')]);
         // A named argument alias lets DoctrineBundle coexist without taking its default DBAL alias.
         $container->registerAliasForArgument('modernorm.connection', Connection::class, 'modernormConnection');
         $container->register('modernorm.event_manager', EventManager::class);
         $container->register('modernorm.configuration', ORMConfiguration::class)->setFactory([EntityManagerFactory::class, 'configuration'])
-            ->setArguments([$config['mapping_paths'], $config['batch_size'], $ref($config['metadata_cache_pool']), $ref($config['query_cache_pool']), $config['l2_cache']['pool'] === null ? null : $ref($config['l2_cache']['pool']), $config['l2_cache']['namespace'], $ref('modernorm.cache_logger')]);
+            ->setArguments([$config['mapping_paths'], $config['batch_size'], $ref($config['metadata_cache_pool']), $ref($config['query_cache_pool']), $config['l2_cache']['pool'] === null ? null : $ref($config['l2_cache']['pool']), $config['l2_cache']['namespace'], $ref('modernorm.cache_logger_dispatcher')]);
         $container->register('modernorm.entity_manager_factory', EntityManagerFactory::class)
             ->setArguments([$ref('modernorm.connection'), $ref('modernorm.configuration'), $ref('modernorm.event_manager')])
             ->addTag('kernel.reset', ['method' => 'reset']);

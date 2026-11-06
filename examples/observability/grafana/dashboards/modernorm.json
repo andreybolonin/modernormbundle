@@ -2,7 +2,7 @@
   "uid": "modernorm-operations",
   "title": "ModernORM Operations",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "editable": false,
   "tags": [
     "modernorm",
@@ -341,7 +341,128 @@
           "placement": "bottom"
         }
       }
+    },
+    {
+      "id": 9,
+      "title": "L2 operations / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "modernorm-vm"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (entity,operation) (rate(modernorm_l2_operations_total{job=\"modernorm-otel-prototype\",modernorm_runtime=~\"$runtime\",operation=~\"hit|miss|put|invalidation\"}[$__rate_interval]))",
+          "legendFormat": "{{entity}} \u00b7 {{operation}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "modernorm-vm"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "ORM logger events only. Invalidation counts include key/class and pre/post-commit calls, not affected rows or Redis memory/TTL evictions."
+    },
+    {
+      "id": 10,
+      "title": "L2 hit ratio by entity",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "modernorm-vm"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (entity) (rate(modernorm_l2_operations_total{job=\"modernorm-otel-prototype\",modernorm_runtime=~\"$runtime\",operation=~\"hit\"}[$__rate_interval])) or on (entity) (0 * sum by (entity) (rate(modernorm_l2_operations_total{job=\"modernorm-otel-prototype\",modernorm_runtime=~\"$runtime\",operation=~\"hit|miss\"}[$__rate_interval])))) / sum by (entity) (rate(modernorm_l2_operations_total{job=\"modernorm-otel-prototype\",modernorm_runtime=~\"$runtime\",operation=~\"hit|miss\"}[$__rate_interval]))",
+          "legendFormat": "{{entity}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "modernorm-vm"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "ORM logger events only. Invalidation counts include key/class and pre/post-commit calls, not affected rows or Redis memory/TTL evictions."
+    },
+    {
+      "id": 11,
+      "title": "L2 invalidations / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "modernorm-vm"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (entity) (rate(modernorm_l2_operations_total{job=\"modernorm-otel-prototype\",modernorm_runtime=~\"$runtime\",operation=~\"invalidation\"}[$__rate_interval]))",
+          "legendFormat": "{{entity}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "modernorm-vm"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "description": "ORM logger events only. Invalidation counts include key/class and pre/post-commit calls, not affected rows or Redis memory/TTL evictions."
     }
   ],
-  "description": "Local OTLP prototype. Sources preserve worker identity. Apply rate before summing counters. Scopes overlap; times must not be added. No L2 export or traces in this first slice."
+  "description": "Local OTLP prototype. Sources preserve writer identity. Apply rate before summing counters. Scopes overlap; times must not be added. L2 labels use a configured entity allowlist. No backend TTL/memory-eviction metrics or traces."
 }

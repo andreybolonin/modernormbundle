@@ -9,12 +9,12 @@ use Doctrine\Common\EventManager;
 use ModernORM\Configuration;
 use ModernORM\EntityManager;
 use ModernORM\Mapping\Driver\AttributeDriver;
-use ModernORM\Cache\Logging\StatisticsCacheLogger;
+use ModernORM\Cache\Logging\CacheLogger;
 use Psr\Cache\CacheItemPoolInterface;
 
 final class EntityManagerFactory implements \Symfony\Contracts\Service\ResetInterface
 {
-    public static function configuration(array $paths, int $batchSize, CacheItemPoolInterface $metadata, CacheItemPoolInterface $query, ?CacheItemPoolInterface $l2, string $namespace, StatisticsCacheLogger $logger): Configuration
+    public static function configuration(array $paths, int $batchSize, CacheItemPoolInterface $metadata, CacheItemPoolInterface $query, ?CacheItemPoolInterface $l2, string $namespace, CacheLogger $logger): Configuration
     {
         $config = new Configuration();
         $config->setMetadataDriverImpl(new AttributeDriver($paths));

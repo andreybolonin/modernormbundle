@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 
 final class Workload
 {
-    public function __construct(private readonly EntityManagerInterface $em, private readonly Statistics $statistics) {}
+    public function __construct(private readonly EntityManagerInterface $em, private readonly Statistics $statistics, private readonly \ModernORM\Cache\Logging\StatisticsCacheLogger $cache) {}
 
     public function __invoke(): JsonResponse { return new JsonResponse($this->run()); }
 
@@ -48,6 +48,6 @@ final class Workload
         // One known SQL error outside a transaction, to validate error counters as well as successes.
         try { $db->fetchOne('SELECT 1 / 0'); } catch (\Doctrine\DBAL\Exception) {}
         $snapshot = $this->statistics->snapshot();
-        return ['pid' => getmypid(), 'sql' => $snapshot->sqlCount, 'sqlErrors' => $snapshot->sqlErrors, 'flush' => $snapshot->flushCount, 'batch' => $snapshot->batch->count, 'bulk' => $snapshot->bulk->count ?? null, 'observerErrors' => $snapshot->observerErrors];
+        return ['pid' => getmypid(), 'sql' => $snapshot->sqlCount, 'sqlErrors' => $snapshot->sqlErrors, 'flush' => $snapshot->flushCount, 'batch' => $snapshot->batch->count, 'bulk' => $snapshot->bulk->count ?? null, 'observerErrors' => $snapshot->observerErrors, 'l2' => ['hit' => $this->cache->getHitCount(), 'miss' => $this->cache->getMissCount(), 'put' => $this->cache->getPutCount(), 'invalidation' => $this->cache->getEvictionCount()]];
     }
 }

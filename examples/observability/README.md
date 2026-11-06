@@ -1,6 +1,6 @@
 # OpenTelemetry metrics prototype
 
-A runnable vertical slice: **ModernORM operation events → official OpenTelemetry PHP SDK → OTLP/HTTP → OpenTelemetry Collector → VictoriaMetrics → Grafana**. The Collector also exposes a Prometheus-compatible endpoint. No shared PHP memory, Redis or application `/metrics` route is required.
+A runnable vertical slice: **ModernORM operation events and L2 logger → official OpenTelemetry PHP SDK → OTLP/HTTP → OpenTelemetry Collector → VictoriaMetrics → Grafana**. The Collector also exposes a Prometheus-compatible endpoint. No shared PHP memory, Redis or application `/metrics` route is required.
 
 This is an opt-in prototype, not an automatically enabled production integration. The example owns its SDK/exporter dependencies. The bundle adapter depends on the OpenTelemetry Metrics API; the ORM core has no OpenTelemetry dependency.
 
@@ -23,7 +23,7 @@ The last command runs 30 real ORM jobs, one second apart. The workload creates P
 
 Open:
 
-- [Grafana dashboard](http://127.0.0.1:13000/d/modernorm-operations/modernorm-operations) — provisioned VictoriaMetrics datasource and eight panels.
+- [Grafana dashboard](http://127.0.0.1:13000/d/modernorm-operations/modernorm-operations) — provisioned VictoriaMetrics datasource and eleven panels, including L2 operations, per-entity hit ratio and invalidations.
 - [Collector Prometheus endpoint](http://127.0.0.1:18889/metrics).
 - [VictoriaMetrics](http://127.0.0.1:18428/vmui/).
 
@@ -43,15 +43,15 @@ The verifier checks:
 
 1. Three jobs reset request Statistics while retaining the same MeterProvider.
 2. Eight concurrent requests are handled by four distinct FPM writers.
-3. Per-writer SQL counters, error counters, flush/batch/bulk counts, affected rows and histogram counts match the workload's Statistics and the Collector. SQL counts are also checked in VictoriaMetrics.
+3. Per-writer SQL counters, error counters, flush/batch/bulk counts, affected rows and histogram counts match the workload's Statistics and the Collector. SQL and global L2 counts are also checked in VictoriaMetrics. L2 hit/miss/put/invalidation totals match request-local cache counters across resets.
 4. A job still completes while the Collector is stopped; its export reports failure.
 5. After restarting the same Collector, two more jobs and four FPM requests are counted correctly under the same writer identities.
 6. Closing the worker does not repeat its already exported delta.
-7. Grafana's dashboard is provisioned and metric labels contain no SQL, entity classes, associations, request IDs, job IDs or exception text.
+7. Grafana's dashboard is provisioned and metric labels contain no SQL, raw entity classes, associations, request IDs, job IDs or exception text. L2 alone includes the explicitly configured `product` entity alias.
 
 The verifier deliberately stops/restarts **this example's Collector**, so run it against an isolated local stack. It uses a distinct deployment prefix for each test run to separate assertions from existing data. Application tables are untouched. See [validation results](VALIDATION.md).
 
-Adapter tests use the official SDK's in-memory exporter:
+Adapter tests use the official SDK's in-memory exporter; the PostgreSQL integration test also requires `MODERNORM_TEST_URL`:
 
 ```bash
 composer test
@@ -68,7 +68,34 @@ composer test
 - Console: at command termination.
 - Custom CLI loops: explicitly after each job. The example worker exercises this path; a unit test checks the real Messenger handled/failed event dispatch paths.
 
-The MeterProvider and adapter are **not** tagged `kernel.reset`. Request Statistics, profiler history and ORM context may reset independently. The example worker resets its ORM context and request counters between jobs while keeping the provider alive. There is no timer thread: long-running jobs must flush at suitable checkpoints if metrics are needed before the job ends.
+The MeterProvider and adapters are **not** tagged `kernel.reset`. Request Statistics, profiler history and ORM context may reset independently. The example worker resets its ORM context and request counters between jobs while keeping the provider alive. There is no timer thread: long-running jobs must flush at suitable checkpoints if metrics are needed before the job ends.
+
+## Global entity L2 metrics
+
+`CacheMetrics` implements the existing core `CacheLogger` interface. Register it alongside the operation observer, using the same application-provided MeterInterface:
+
+```php
+use ModernORM\Bundle\Observability\OpenTelemetry\CacheMetrics;
+
+$services->set(CacheMetrics::class)
+    ->args([new Reference('prototype.meter'), [Entity\Product::class => 'product']])
+    ->tag('modernorm.cache_logger');
+```
+
+The bundle's dispatcher always updates its existing `StatisticsCacheLogger`, then calls tagged cache loggers. Existing profiler counters and their reset behavior remain unchanged. Tagged loggers run independently of the Statistics enabled flag and HTTP Profiler, covering ordinary cached finds, cached ManyToOne batch loading and invalidation paths. There is no snapshot polling or replay on reset. Do not tag a logger/SDK provider with `kernel.reset`; it must retain its instruments across jobs. The same flush boundaries as operation metrics apply.
+
+Entity labels use an explicit class-to-alias allowlist, fixed for the provider lifetime. Unlisted classes share `entity="other"`; the default empty map exports only this aggregate. The reserved `other` alias cannot be configured. Aliases may group several classes. Never generate aliases from identifiers, tenants, requests or jobs. Only the four fixed `operation` values and configured aliases are exported; no new label values are retained from event input.
+
+`modernorm.l2.operations` counts logger notifications:
+
+- `hit`: a usable cached entity entry was found.
+- `miss`: an L2 lookup did not produce a usable entry, including invalid entries or an absent database row. No negative entry is published.
+- `put`: a successful entity payload publication, not every SQL read.
+- `invalidation`: a successful ORM key/class invalidation call. Pre-write and post-commit invalidations are separate events; a class invalidation counts once, not once per affected row. SoftDelete/restore use these existing invalidation paths on compatible cores.
+
+Identity Map hits, transaction cache bypasses, repository queries that bypass L2 and raw PSR-6 operations are not additional hits/misses. Redis TTL expiry and memory-pressure evictions are not observable through this API and need backend monitoring. Invalidation failures do not produce a successful notification. A put event does not prove that a concurrent invalidation left the payload reachable.
+
+Logger callback exceptions are isolated from ORM/cache work and remaining loggers. `CacheLoggerDispatcher::failures()` counts failed callbacks over its service lifetime; it does not contain exception text. Instrument construction/configuration errors still fail service creation. Network export failures use `FlushMetrics`' existing best-effort contract. Counters are telemetry, not a durable audit log.
 
 ## Metrics
 
@@ -81,13 +108,14 @@ The MeterProvider and adapter are **not** tagged `kernel.reset`. Request Statist
 | `modernorm.bulk.rows` | Counter | Known input/affected/returned rows, by bulk operation and policy |
 | `modernorm.hydration.rows` | Counter | Consumed rows, including explicit incomplete-scope status |
 | `modernorm.hydration.entities` | Counter | Newly created entities |
+| `modernorm.l2.operations` | Counter | Global L2 hit/miss/put/invalidation notifications by explicit entity alias |
 | `modernorm.unit_of_work.managed` | Histogram | Managed context sizes observed at phase boundaries |
 
-Labels are limited to operation, outcome, association kind, bulk operation/policy, phase, row kind, completion status and fallback reason. Resource labels identify service, deployment, runtime and writer. Histogram boundaries are fixed. Unknown affected/returned row counts are omitted, not converted to zero. Fallbacks are separate decisions, not additional SQL operations. Overlapping scopes must not have their durations or errors added together.
+Labels are limited to operation, outcome, association kind, bulk operation/policy, phase, row kind, completion status and fallback reason; L2 adds only the configured entity alias. Resource labels identify service, deployment, runtime and writer. Histogram boundaries are fixed. Unknown affected/returned row counts are omitted, not converted to zero. Fallbacks are separate decisions, not additional SQL operations. Overlapping scopes must not have their durations or errors added together.
 
 The Collector translates names to Prometheus conventions, for example `modernorm_operations_total` and `modernorm_operation_duration_seconds_bucket`. Dashboard rates are calculated **per writer before summing**. The cumulative count panel is diagnostic, not an all-time business total. The first observed delta is counted by the Collector, but rate calculations cannot infer a pre-observation sample.
 
-Entity L2 is exercised by the workload but **global L2 counters are not exported in this slice**: existing global L2 activity comes from a separate logger, not the operation observer. Traces, exemplars, host metrics and request-duration metrics are also outside this prototype.
+The Collector translates the L2 counter to `modernorm_l2_operations_total`. The dashboard computes per-writer rates before aggregation and uses `hits / (hits + misses)` by entity, including a zero numerator for miss-only series; no-lookup intervals have no defined ratio. First observations may need a second scrape before a rate exists. Traces, exemplars, backend Redis metrics, host metrics and request-duration metrics remain outside this prototype.
 
 ## Worker identity and temporality
 
@@ -103,6 +131,6 @@ The PHP transport makes one HTTP attempt per flush, with a 250 ms configured tim
 
 Delivery is **best effort**. A failed delta is not durably queued or replayed. OTLP acknowledgement does not imply durable storage in VictoriaMetrics. Collector accumulation is in memory: restarting or expiring a stream resets its cumulative history; backend history remains stored. The restart check validates recovery and absence of replay, not lossless continuity. Remote-write queues are not a substitute for durable end-to-end delivery.
 
-Before production use, resolve deployment/process-generation identity, Collector HA/routing, retry/queue/deduplication policy, failure monitoring and the L2 logger bridge. Test long-job checkpoints, process recycling and shutdown paths under the intended hosting environment. The selected Collector's delta-to-cumulative processor is currently classified alpha; the pinned configuration is a validated prototype choice, not a stability guarantee.
+Before production use, resolve deployment/process-generation identity, Collector HA/routing, retry/queue/deduplication policy, failure monitoring and hosting-specific lifecycle behavior. Test long-job checkpoints, process recycling and shutdown paths under the intended hosting environment. The selected Collector's delta-to-cumulative processor is currently classified alpha; the pinned configuration is a validated prototype choice, not a stability guarantee.
 
 References: [OpenTelemetry metric stream model](https://opentelemetry.io/docs/specs/otel/metrics/data-model/), [PHP SDK](https://opentelemetry.io/docs/languages/php/), [delta-to-cumulative processor](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.164.0/processor/deltatocumulativeprocessor).

@@ -87,7 +87,22 @@ def verify_phase(results):
         values = data['data']['result']
         return bool(values) and float(values[0]['value'][1]) == sql
     wait(stored, seconds=45)
-    forbidden = {'sql', 'entity', 'entity_class', 'association', 'request_id', 'job_id', 'exception'}
+    for operation in ('hit', 'miss', 'put', 'invalidation'):
+        expected_l2 = sum(r['l2'][operation] for r in results)
+        assert expected_l2 > 0, (operation, results)
+        assert total(samples, 'modernorm_l2_operations_total', operation=operation, entity='product') == expected_l2
+    l2_query = 'sum(modernorm_l2_operations_total{service_instance_id=~"' + PREFIX + ':.*"})'
+    def l2_stored():
+        data = json.loads(fetch('http://127.0.0.1:18428/api/v1/query?' + urllib.parse.urlencode({'query': l2_query, 'nocache': '1', 'latency_offset': '1ms'})))
+        values = data['data']['result']
+        return bool(values) and float(values[0]['value'][1]) == sum(sum(r['l2'].values()) for r in results)
+    wait(l2_stored, seconds=45)
+    for name, attrs, _ in samples:
+        if name == 'modernorm_l2_operations_total':
+            assert attrs.get('entity') == 'product', attrs
+        else:
+            assert 'entity' not in attrs, (name, attrs)
+    forbidden = {'sql', 'entity_class', 'association', 'request_id', 'job_id', 'exception'}
     assert all(not forbidden.intersection(attrs) for _, attrs, _ in samples)
     print(json.dumps({'scopes': len(results), 'sql': sql, 'sql_errors': errors, 'bulk': 3 * len(results), 'writers': len(expected), 'collector_and_victoriametrics': 'matched'}), flush=True)
 
@@ -150,6 +165,7 @@ def main():
     wait(lambda: json.loads(fetch('http://127.0.0.1:13000/api/health'))['database'] == 'ok')
     wait(lambda: fetch('http://127.0.0.1:18889/metrics') is not None)
     runtime = Path(tempfile.mkdtemp(prefix='modernorm-otel-verify-'))
+    ENV['MODERNORM_OTEL_CACHE_DIR'] = str(runtime / 'cache')
     worker = fpm = None
     collector_stopped = False
     with (runtime / 'worker.log').open('w') as worker_log, (runtime / 'fpm.log').open('w') as fpm_log:
@@ -198,7 +214,8 @@ def main():
             verify_phase(after)
             data = json.loads(fetch('http://127.0.0.1:13000/api/dashboards/uid/modernorm-operations'))
             assert data['dashboard']['title'] == 'ModernORM Operations'
-            print('PASS: real FPM concurrency, persistent jobs, resets, bounded outage, Collector restart, OTLP/VM totals, histograms and Grafana provisioning.', flush=True)
+            assert len(data['dashboard']['panels']) == 11
+            print('PASS: real FPM concurrency, persistent jobs, resets, bounded outage, Collector restart, OTLP/VM totals, histograms, global L2 counters and Grafana provisioning.', flush=True)
         finally:
             if worker is not None and worker.poll() is None:
                 worker.terminate(); worker.wait(timeout=10)
