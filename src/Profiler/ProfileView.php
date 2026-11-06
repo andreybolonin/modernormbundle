@@ -57,6 +57,33 @@ final class ProfileView
         }, $events);
     }
 
+    /** Groups only actionable retained evidence; no attribution is inferred from SQL. */
+    public static function batchAdviceGroups(array $events): array
+    {
+        $groups = [];
+        foreach ($events as $event) {
+            $e = self::values($event);
+            $kind = $e['kind'] ?? null;
+            if (!in_array($kind, ['batch', 'batch_fallback'], true) || ($e['failed'] ?? false)) { continue; }
+            $association = $e['association'] ?? null;
+            $entity = $e['entityClass'] ?? null;
+            if (($association === null || $association === '') && ($entity === null || $entity === '')) { continue; }
+            $size = $e['configuredSize'] ?? 0;
+            $fallback = $kind === 'batch_fallback' && ($e['fallbackReason'] ?? null) === 'size_one' && $size === 1;
+            $singleton = $kind === 'batch' && $size > 1 && ($e['selectedReferences'] ?? 0) + ($e['selectedCollections'] ?? 0) === 1;
+            if (!$fallback && !$singleton) { continue; }
+            $key = hash('sha256', serialize([$e['batchKind'] ?? null, $entity, $association, $size]));
+            $groups[$key] ??= ['id' => $key, 'kind' => $e['batchKind'] ?? 'unknown', 'entity' => $entity,
+                'association' => $association, 'configuredSize' => $size, 'fallbacks' => 0, 'singleLoads' => 0, 'singleTimeMs' => 0.0];
+            if ($fallback) { ++$groups[$key]['fallbacks']; }
+            if ($singleton) {
+                ++$groups[$key]['singleLoads'];
+                $groups[$key]['singleTimeMs'] += ($e['durationNanoseconds'] ?? 0) / 1_000_000;
+            }
+        }
+        return array_values($groups);
+    }
+
     public static function repeatedQueries(array $queries): array
     {
         $groups = [];

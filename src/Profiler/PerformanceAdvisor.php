@@ -9,7 +9,7 @@ final class PerformanceAdvisor
 {
     public function __construct(private readonly array $options = []) {}
 
-    public function analyze(array $metrics, array $queries, array $l2, int $queriesDropped = 0): array
+    public function analyze(array $metrics, array $queries, array $l2, int $queriesDropped = 0, array $events = [], int $eventsDropped = 0): array
     {
         if (!($this->options['enabled'] ?? true)) { return []; }
         $findings = [];
@@ -33,6 +33,12 @@ final class PerformanceAdvisor
                 sprintf('Query #%d took %0.2f ms at the driver boundary. Fetching and hydration are measured separately.', $query['index'], $query['durationMilliseconds']) . $sampleNote,
                 'Review the SQL and inspect a PostgreSQL execution plan in your database tooling. A slow query alone does not identify a missing index.', 'queries', $query['index'], $query['durationMilliseconds']);
         }
+        $flush = $metrics['flush'] ?? null;
+        if ($flush !== null && $flush['count'] - $flush['errors'] >= ($this->options['flush_count_threshold'] ?? 5)) {
+            $add('repeated_flush', 'warning', 'Repeated flush() calls',
+                sprintf('%d successful flush attempts out of %d (%d failed), accumulating %0.2f ms in this request. Counts alone do not prove a flush inside a loop or unnecessary writes.', $flush['count'] - $flush['errors'], $flush['count'], $flush['errors'], $flush['timeMs']),
+                'Review flush call sites and transaction boundaries. Group changes into fewer flushes only when business semantics allow it; for large jobs consider explicit chunks. Inspect failures before retrying.', 'unitofwork', timeMs: $flush['timeMs']);
+        }
         $work = $metrics['unitOfWork'] ?? null;
         if ($work !== null && ($work['observedManagedMax'] ?? 0) >= ($this->options['managed_entities_threshold'] ?? 1000)) {
             $add('large_context', 'warning', 'Large observed UnitOfWork', sprintf('%d managed entities observed at retained phase boundaries; this is not a memory measurement or a guaranteed request peak.', $work['observedManagedMax']),
@@ -42,10 +48,26 @@ final class PerformanceAdvisor
             $add('dirty_checking', 'warning', 'Costly change-set calculation', sprintf('Change-set phases accumulated %0.2f ms across %d attempts.', $work['phases']['change_sets']['timeMs'], $work['phases']['change_sets']['count']),
                 'Inspect the managed context and flush frequency. Use Immutable only for models whose field updates should be ignored.', 'unitofwork', timeMs: $work['phases']['change_sets']['timeMs']);
         }
-        foreach ($metrics['batch']['fallbackCounts'] ?? [] as $reason => $count) {
-            if ($reason !== 'size_one' || $count < ($this->options['batch_fallback_threshold'] ?? 5)) { continue; }
-            $add('batch_'.$reason, 'info', 'Repeated single-load fallback', sprintf('%d size_one fallback decisions were recorded. They describe loader selection, not proven extra queries.', $count),
-                'Review the association batchSize where repeated lazy access is expected. A size of one can be an intentional opt-out.', 'batch');
+        $hasAttributedFallback = false;
+        $eventNote = $eventsDropped > 0 ? sprintf(' %d operation events were omitted; these counts cover retained events only.', $eventsDropped) : '';
+        foreach (ProfileView::batchAdviceGroups($events) as $group) {
+            $subject = $group['association'] ?: 'target '.$group['entity'].' (source association not recorded)';
+            if ($group['fallbacks'] >= ($this->options['batch_fallback_threshold'] ?? 5)) {
+                $hasAttributedFallback = true;
+                $add('batch_size_one_'.$group['id'], 'info', 'Repeated single-load fallback · '.$subject,
+                    sprintf('%s: %d size_one fallback decisions in retained events; configured batchSize %d (%s). These are loader decisions, not SQL counts.', $subject, $group['fallbacks'], $group['configuredSize'], $group['kind']) . $eventNote,
+                    'Review batchSize for this association or target class where repeated lazy access is expected. A size of one can be an intentional opt-out.', 'batch');
+            }
+            if ($group['singleLoads'] >= ($this->options['batch_singleton_threshold'] ?? 5)) {
+                $add('batch_singleton_'.$group['id'], 'info', 'Repeated one-item batches · '.$subject,
+                    sprintf('%s: %d successful batches selected one reference or collection each, with configured batchSize %d (%s); %0.2f ms in retained events. Selected items are not database row or SQL counts.', $subject, $group['singleLoads'], $group['configuredSize'], $group['kind'], $group['singleTimeMs']) . $eventNote,
+                    'Review when references or collection owners enter the loading queue and when they are accessed. A larger batchSize alone may not help; isolated access can be intentional. These events do not prove N+1.', 'batch', timeMs: $group['singleTimeMs']);
+            }
+        }
+        $fallbackCount = $metrics['batch']['fallbackCounts']['size_one'] ?? 0;
+        if (!$hasAttributedFallback && $fallbackCount >= ($this->options['batch_fallback_threshold'] ?? 5)) {
+            $add('batch_size_one', 'info', 'Repeated single-load fallback', sprintf('%d size_one fallback decisions were recorded in aggregate. No individual association or target reached the threshold in retained events. Decisions do not prove extra queries.', $fallbackCount),
+                'Review the association batchSize where repeated lazy access is expected. A size of one can be an intentional opt-out. Inspect event-history coverage before attributing this aggregate to a specific association.', 'batch');
         }
         $hydration = $metrics['hydration'] ?? null;
         if ($hydration !== null && ($hydration['timeMs'] ?? 0) > 0 && $hydration['timeMs'] >= ($this->options['hydration_ms'] ?? 50)) {

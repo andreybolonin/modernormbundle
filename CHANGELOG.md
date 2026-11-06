@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add configurable Advisor hints for repeated successful flushes and association/target-specific size-one fallbacks and one-item batches, with explicit retained-event coverage and aggregate fallback behavior.
+
 - Add optional global L2 OpenTelemetry counters through tagged cache loggers, independently of Statistics/Profiler resets; isolate logger callback failures and bound entity labels with an explicit allowlist. Extend the OTLP example, Grafana panels and lifecycle/SDK verification.
 
 - Rank Performance Advisor findings by severity and measured duration, disclose incomplete SQL samples, and add configurable hydration time/entity-count diagnostics with focused regression coverage.

@@ -128,6 +128,14 @@ The Performance Advisor orders findings by severity, then measured duration (des
 
 Hydration rules use aggregate counters even when operation history is limited. `modernorm.profiler.advisor.hydration_ms` defaults to 50 ms of active hydration time; `hydrated_entities_threshold` defaults to 1000 newly created entity instances. Counts do not measure peak memory or distinct database entities. Older cores without hydration metrics skip these rules. Omitted SQL entries are disclosed in query evidence and in the Advisor overview, including when no SQL finding reaches a threshold. Query ranking covers only retained entries, not the slowest executions of the entire request.
 
+Additional Advisor thresholds under `modernorm.profiler.advisor`:
+
+- `flush_count_threshold` (default 5): successful flush attempts per request. Evidence includes total attempts, failures and aggregate duration, independently of retained events. It does not establish a flush inside a loop or redundant writes; changing flush boundaries can change business semantics.
+- `batch_singleton_threshold` (default 5): successful retained batches that each selected exactly one reference or collection despite a configured size above one, grouped by association kind, target class, association and configured size. Review loading/access order before increasing batchSize. Selected items are not rows or SQL counts.
+- `batch_fallback_threshold` (default 5): repeated `size_one` fallback decisions, now attributed to individual retained association/target groups where possible. When no group reaches the threshold, the existing aggregate hint remains available. A concrete finding replaces the duplicate aggregate hint.
+
+Association hints use saved operation events. Missing source associations are displayed as target classes; ManyToOne events currently do not identify the source association. Dropped events are disclosed, counts are never extrapolated, and absence of a finding does not establish absence of a loading issue. Failed batches, multi-item batches and unrelated fallback reasons do not count toward the one-item rule. Rules do not execute SQL or claim proven N+1.
+
 ## Workers and exporters
 
 Statistics, L2 counters, SQL history and event history are registered with `kernel.reset`. The EntityManager factory clears and resets its lazy proxy and closes the connection, discarding unfinished transactions. Injected EntityManager references remain valid after a closed manager is reset. Standard Symfony/Messenger service resets must remain enabled. Custom worker loops must reset services between jobs.

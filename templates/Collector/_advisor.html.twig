@@ -8,6 +8,7 @@
         <p class="morm-note">Advisor was not collected. Enable Statistics and the Profiler advisor, then capture a new request.</p>
     {% else %}
         {% if collector.sqlEnabled and collector.queriesDropped and active in ['overview', 'queries'] %}<p class="morm-notice">{{ collector.queriesDropped }} SQL entries were omitted. SQL findings cover only the retained sample; no findings does not establish that the full request was below the thresholds.</p>{% endif %}
+        {% if collector.dropped|default(0) and active in ['overview', 'batch'] %}<p class="morm-notice">{{ collector.dropped }} operation events were omitted. Association-specific batch findings cover retained events only; flush and fallback aggregate counters remain complete.</p>{% endif %}
         {% for finding in findings %}
             <article class="morm-finding" data-finding="{{ finding.id }}">
                 <span class="morm-severity-{{ finding.severity }}" aria-label="{{ finding.severity }}">{{ ui.icon('alert') }}</span>

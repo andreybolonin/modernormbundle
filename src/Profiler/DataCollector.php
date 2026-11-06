@@ -42,7 +42,7 @@ final class DataCollector extends BaseCollector
                 'coreVersion' => \Composer\InstalledVersions::getPrettyVersion('andreybolonin/modernorm') ?? 'unknown', 'phpVersion' => PHP_VERSION],
         ];
         $this->data['findings'] = $this->data['advisorEnabled']
-            ? ($this->advisor ?? new PerformanceAdvisor())->analyze($metrics, $this->data['queries'], $l2, $this->data['queriesDropped']) : [];
+            ? ($this->advisor ?? new PerformanceAdvisor())->analyze($metrics, $this->data['queries'], $l2, $this->data['queriesDropped'], $events, $this->data['dropped']) : [];
     }
 
     public function getName(): string { return 'modernorm'; }
