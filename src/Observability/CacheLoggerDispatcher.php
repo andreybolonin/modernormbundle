@@ -20,17 +20,34 @@ final class CacheLoggerDispatcher implements CacheLogger
     {
         // Resolve lazy tagged services before any cache callback/commit can run.
         $resolved = [];
-        foreach ($loggers as $logger) { $resolved[] = $logger; }
+        foreach ($loggers as $logger) {
+            $resolved[] = $logger;
+        }
         $this->loggers = $resolved;
     }
 
-    public function hit(string $entity): void { $this->record('hit', $entity); }
-    public function miss(string $entity): void { $this->record('miss', $entity); }
-    public function put(string $entity): void { $this->record('put', $entity); }
-    public function evict(string $entity): void { $this->record('evict', $entity); }
+    public function hit(string $entity): void
+    {
+        $this->record('hit', $entity);
+    }
+    public function miss(string $entity): void
+    {
+        $this->record('miss', $entity);
+    }
+    public function put(string $entity): void
+    {
+        $this->record('put', $entity);
+    }
+    public function evict(string $entity): void
+    {
+        $this->record('evict', $entity);
+    }
 
     /** Cumulative failed logger callbacks; independent of request/job resets. */
-    public function failures(): int { return $this->failures; }
+    public function failures(): int
+    {
+        return $this->failures;
+    }
 
     private function record(string $operation, string $entity): void
     {

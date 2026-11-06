@@ -24,7 +24,9 @@ final class Registry extends AbstractManagerRegistry
     }
     protected function resetService(string $name): void
     {
-        if ($name !== 'manager') { throw new \InvalidArgumentException('Unknown ModernORM manager: '.$name); }
+        if ($name !== 'manager') {
+            throw new \InvalidArgumentException('Unknown ModernORM manager: '.$name);
+        }
         $this->factory->reset();
     }
 }

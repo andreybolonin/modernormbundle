@@ -8,13 +8,14 @@ use OpenTelemetry\Contrib\Otlp\MetricExporter;
 use OpenTelemetry\SDK\Common\Attribute\Attributes;
 use OpenTelemetry\SDK\Common\Export\Http\PsrTransportFactory;
 use OpenTelemetry\SDK\Metrics\MeterProvider;
+use OpenTelemetry\SDK\Metrics\MeterProviderInterface;
 use OpenTelemetry\SDK\Metrics\MetricReader\ExportingReader;
 use OpenTelemetry\SDK\Metrics\TemporalityPreference;
 use OpenTelemetry\SDK\Resource\ResourceInfo;
 
 final class MetricsProvider
 {
-    public static function create(): MeterProvider
+    public static function create(): MeterProviderInterface
     {
         // Stable across sequential requests in one FPM process, distinct across concurrent writers.
         // Override the deployment instance prefix when deploying multiple hosts/containers.

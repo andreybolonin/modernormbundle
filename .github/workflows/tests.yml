@@ -14,6 +14,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  quality:
+    name: PHPStan and PSR-12
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      COMPOSER_ROOT_VERSION: 0.1.0-beta.3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, ctype, iconv, mbstring, dom, xml, xmlwriter
+          tools: composer:v2
+          coverage: none
+      - run: composer validate --strict
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Install optional SDK for adapter analysis
+        run: composer install --working-dir=examples/observability --no-interaction --prefer-dist --no-progress
+      - run: composer quality
   tests:
     name: PHP ${{ matrix.php }} / Symfony ${{ matrix.symfony }}
     runs-on: ubuntu-latest
@@ -140,3 +161,5 @@ jobs:
         run: |
           composer install --working-dir=examples/observability --no-interaction --prefer-dist --no-progress
           php vendor/bin/phpunit --bootstrap examples/observability/bootstrap.php examples/observability/tests tools/core-compatibility/otel --fail-on-skipped
+      - name: Static analysis against pinned core
+        run: composer analyse:core

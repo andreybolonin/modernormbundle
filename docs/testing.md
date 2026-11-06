@@ -21,3 +21,18 @@ Functional tests boot a standalone Symfony kernel and verify persisted profiles,
 ## Core compatibility
 
 The normal dependency matrix tests the published core constraint. A separate [pinned-core compatibility matrix](../tools/core-compatibility/README.md) runs the full bundle suite and real bulk SoftDelete/restore checks for saved Profiler views and OpenTelemetry metrics on PHP 8.4/8.5, without requiring an unreleased core for ordinary installations.
+
+## Static analysis and code style
+
+```sh
+composer install
+composer install --working-dir=examples/observability
+composer quality
+# Apply formatting, then verify again:
+composer cs:fix
+composer quality
+```
+
+`composer analyse` runs PHPStan level 5 over production code, tests, CI tools and examples. The example owns its SDK dependencies; the root requires only the Metrics API as a development dependency for optional-adapter analysis. PHP-CS-Fixer enforces PSR-12 across all shipped PHP, including pinned-core tools. Neither tool uses a baseline or per-line suppressions.
+
+The `PHPStan and PSR-12` CI job runs `composer quality` on PHP 8.4. Core compatibility jobs additionally run `composer analyse:core` with the pinned checkout, covering APIs not yet present in the published minimum core. Request state and database nesting are checked at runtime; analysis does not cache potentially stateful getter results across callbacks.

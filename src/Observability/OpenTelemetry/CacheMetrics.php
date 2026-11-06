@@ -24,10 +24,22 @@ final class CacheMetrics implements CacheLogger
         $this->operations = $meter->createCounter('modernorm.l2.operations', '{operation}', 'Observed L2 hits, misses, successful puts and ORM invalidation calls; not backend evictions.');
     }
 
-    public function hit(string $entity): void { $this->record('hit', $entity); }
-    public function miss(string $entity): void { $this->record('miss', $entity); }
-    public function put(string $entity): void { $this->record('put', $entity); }
-    public function evict(string $entity): void { $this->record('invalidation', $entity); }
+    public function hit(string $entity): void
+    {
+        $this->record('hit', $entity);
+    }
+    public function miss(string $entity): void
+    {
+        $this->record('miss', $entity);
+    }
+    public function put(string $entity): void
+    {
+        $this->record('put', $entity);
+    }
+    public function evict(string $entity): void
+    {
+        $this->record('invalidation', $entity);
+    }
 
     private function record(string $operation, string $entity): void
     {

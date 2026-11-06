@@ -41,7 +41,9 @@ final class CacheMetricsIntegrationTest extends TestCase
 {
     public function testRealFindBatchAndBulkEventsMatchLocalCountersWithStatisticsDisabled(): void
     {
-        if (!getenv('MODERNORM_TEST_URL')) { self::markTestSkipped('Set MODERNORM_TEST_URL for L2 integration.'); }
+        if (!getenv('MODERNORM_TEST_URL')) {
+            self::markTestSkipped('Set MODERNORM_TEST_URL for L2 integration.');
+        }
         $exporter = new InMemoryExporter(temporality: Temporality::DELTA);
         $provider = MeterProvider::builder()->addReader(new ExportingReader($exporter))->build();
         $request = new StatisticsCacheLogger();
@@ -61,7 +63,11 @@ final class CacheMetricsIntegrationTest extends TestCase
                 $actual = [];
                 foreach ($exporter->collect(true) as $metric) {
                     self::assertSame('modernorm.l2.operations', $metric->name);
-                    foreach ($metric->data->dataPoints as $point) {
+                    $data = $metric->data;
+                    if (!$data instanceof \OpenTelemetry\SDK\Metrics\Data\Sum && !$data instanceof \OpenTelemetry\SDK\Metrics\Data\Histogram) {
+                        self::fail('Expected counter or histogram metric data.');
+                    }
+                    foreach ($data->dataPoints as $point) {
                         self::assertSame('item', $point->attributes->toArray()['entity']);
                         $actual[$point->attributes->toArray()['operation']] = $point->value;
                     }

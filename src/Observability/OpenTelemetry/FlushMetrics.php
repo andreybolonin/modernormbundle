@@ -15,12 +15,17 @@ final class FlushMetrics implements EventSubscriberInterface
 
     private readonly \Closure $flush;
 
-    public function __construct(callable $flush) { $this->flush = $flush(...); }
+    public function __construct(callable $flush)
+    {
+        $this->flush = $flush(...);
+    }
 
     public function flush(): bool
     {
         try {
-            if (($this->flush)()) { return true; }
+            if (($this->flush)()) {
+                return true;
+            }
         } catch (\Throwable) {
             // Monitoring failures must not become application failures.
         }
@@ -29,7 +34,10 @@ final class FlushMetrics implements EventSubscriberInterface
         return false;
     }
 
-    public function failures(): int { return $this->failures; }
+    public function failures(): int
+    {
+        return $this->failures;
+    }
 
     public static function getSubscribedEvents(): array
     {

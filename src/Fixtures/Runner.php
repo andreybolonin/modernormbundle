@@ -8,6 +8,7 @@ use Doctrine\Common\DataFixtures\SharedFixtureInterface;
 use ModernORM\Bundle\Schema\CacheInvalidator;
 use ModernORM\Bundle\Schema\SchemaScope;
 use ModernORM\EntityManager;
+use Doctrine\Common\EventManager;
 use ModernORM\EntityManagerInterface;
 
 final class Runner
@@ -32,10 +33,14 @@ final class Runner
         if ($connection->isTransactionActive() || !$connection->isAutoCommit()) {
             throw new \LogicException('Fixture loading requires an idle, auto-commit connection.');
         }
+        $events = $this->manager->getEventManager();
+        if (!$events instanceof EventManager) {
+            throw new \LogicException('Fixture loading requires the concrete EventManager accepted by ModernORM.');
+        }
         $this->manager->clear();
         $config = clone $this->manager->getConfiguration();
         $config->setSecondLevelCacheEnabled(false);
-        $working = new EntityManager($connection, $config, $this->manager->getEventManager());
+        $working = new EntityManager($connection, $config, $events);
         $references = new ReferenceRepository($working);
         $this->cache->invalidate();
         $committed = false;
@@ -84,8 +89,8 @@ final class Runner
                 $connection->close();
                 try {
                     $this->manager->close();
-                } catch (\Throwable $cleanupFailure) {
-                    $error ??= $cleanupFailure;
+                } catch (\Throwable) {
+                    // Preserve the original load/commit failure.
                 }
             }
         } finally {

@@ -1,0 +1,17 @@
+parameters:
+    level: 5
+    paths:
+        - src
+        - tests
+        - tools/ci
+        - examples/migrations-fixtures
+        - examples/observability
+    excludePaths:
+        analyseAndScan:
+            - examples/observability/vendor
+            - examples/observability/.runtime (?)
+    bootstrapFiles:
+        - examples/observability/bootstrap.php
+    tmpDir: .phpstan-cache
+    treatPhpDocTypesAsCertain: false
+    rememberPossiblyImpureFunctionValues: false

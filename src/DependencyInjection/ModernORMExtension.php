@@ -26,7 +26,10 @@ use Symfony\Component\DependencyInjection\Reference;
 
 final class ModernORMExtension extends Extension
 {
-    public function getAlias(): string { return 'modernorm'; }
+    public function getAlias(): string
+    {
+        return 'modernorm';
+    }
 
     public function load(array $configs, ContainerBuilder $container): void
     {

@@ -40,23 +40,28 @@ final class SoftDeleteProfileTest extends TestCase
         $history->startRequest();
         $statistics = new Statistics(true, $history);
         $connection = ConnectionFactory::create(getenv('MODERNORM_TEST_URL'), '17', $statistics);
-        $config = new Configuration(); $config->setMetadataDriverImpl(new AttributeDriver([]));
+        $config = new Configuration();
+        $config->setMetadataDriverImpl(new AttributeDriver([]));
         $em = new EntityManager($connection, $config);
         try {
             $connection->executeStatement('CREATE TEMP TABLE morm_profile_soft_item (id INT PRIMARY KEY, code TEXT NOT NULL UNIQUE, deleted_at TIMESTAMP DEFAULT NULL)');
             $connection->executeStatement("INSERT INTO morm_profile_soft_item VALUES (1, 'private-one'), (2, 'private-two')");
-            $history->reset(); $history->startRequest(); $statistics->reset();
+            $history->reset();
+            $history->startRequest();
+            $statistics->reset();
             $em->bulk()->softDelete(ProfileSoftItem::class, 'id = :id', BulkPolicy::CLEAR, ['id' => 1], returning: ['id']);
             $em->bulk()->restore(ProfileSoftItem::class, 'id = :id', BulkPolicy::BYPASS, ['id' => 1], returning: ['id']);
             $em->bulk()->restore(ProfileSoftItem::class, 'id = :id', BulkPolicy::CLEAR, ['id' => 1]);
             try {
                 $em->bulk()->softDelete(ProfileSoftItem::class, 'TRUE', BulkPolicy::CLEAR, values: ['code' => 'private-conflict']);
                 self::fail('Expected atomic unique violation');
-            } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException) {}
+            } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException) {
+            }
             $collector = new DataCollector($statistics, new StatisticsCacheLogger(), $history, false, new SqlHistory(false, 0, 128));
             $collector->collect(Request::create('/'), new Response());
             $saved = unserialize(serialize($collector));
-            $statistics->reset(); $history->reset();
+            $statistics->reset();
+            $history->reset();
             $calls = $saved->getEventRows('bulk');
             self::assertSame(['soft_delete', 'restore', 'restore', 'soft_delete'], array_column(array_column($calls, 'bulk'), 'operation'));
             self::assertSame(['CLEAR', 'BYPASS', 'CLEAR', 'CLEAR'], array_column(array_column($calls, 'bulk'), 'policy'));
@@ -68,9 +73,13 @@ final class SoftDeleteProfileTest extends TestCase
             $loader->addPath(dirname(__DIR__, 3).'/templates', 'ModernORM');
             $twig = new \Twig\Environment($loader, ['strict_variables' => true]);
             $html = $twig->render('@ModernORM/Collector/tabs/bulk.html.twig', ['collector' => $saved, 'metrics' => $saved->getMetrics()]);
-            foreach (['SOFT_DELETE', 'RESTORE', 'CLEAR', 'BYPASS', 'Committed', 'Not established'] as $text) { self::assertStringContainsString($text, $html); }
+            foreach (['SOFT_DELETE', 'RESTORE', 'CLEAR', 'BYPASS', 'Committed', 'Not established'] as $text) {
+                self::assertStringContainsString($text, $html);
+            }
             self::assertStringNotContainsString('private-', $html);
             self::assertSame('soft_delete', BulkOperation::SOFT_DELETE->value);
-        } finally { $connection->close(); }
+        } finally {
+            $connection->close();
+        }
     }
 }

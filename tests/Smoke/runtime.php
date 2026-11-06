@@ -27,9 +27,18 @@ final class RuntimeKernel extends Kernel
         yield new ModernORMBundle();
     }
 
-    public function getProjectDir(): string { return dirname(__DIR__, 2); }
-    public function getCacheDir(): string { return sys_get_temp_dir().'/modernorm-bundle-runtime-'.getmypid(); }
-    public function getLogDir(): string { return $this->getCacheDir().'/log'; }
+    public function getProjectDir(): string
+    {
+        return dirname(__DIR__, 2);
+    }
+    public function getCacheDir(): string
+    {
+        return sys_get_temp_dir().'/modernorm-bundle-runtime-'.getmypid();
+    }
+    public function getLogDir(): string
+    {
+        return $this->getCacheDir().'/log';
+    }
 
     protected function configureContainer(ContainerConfigurator $container): void
     {
@@ -45,7 +54,9 @@ final class RuntimeKernel extends Kernel
         $container->services()->alias('smoke.statistics', 'modernorm.statistics')->public();
     }
 
-    protected function configureRoutes(RoutingConfigurator $routes): void {}
+    protected function configureRoutes(RoutingConfigurator $routes): void
+    {
+    }
 }
 
 #[ORM\Entity]
@@ -62,7 +73,7 @@ foreach ([
     \Symfony\Bundle\WebProfilerBundle\WebProfilerBundle::class,
     \Doctrine\Migrations\DependencyFactory::class,
     \Doctrine\Common\DataFixtures\Loader::class,
-    \Doctrine\ORM\EntityManagerInterface::class,
+    'Doctrine\\ORM\\EntityManagerInterface',
 ] as $optional) {
     if (class_exists($optional) || interface_exists($optional)) {
         throw new \RuntimeException('Run smoke after composer install --no-dev: '.$optional.' is still installed.');

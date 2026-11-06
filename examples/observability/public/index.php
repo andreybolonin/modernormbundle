@@ -10,6 +10,8 @@ $kernel = new Kernel();
 $request = Request::createFromGlobals();
 $response = $kernel->handle($request);
 $response->send();
-if (function_exists('fastcgi_finish_request')) { fastcgi_finish_request(); }
+if (function_exists('fastcgi_finish_request')) {
+    fastcgi_finish_request();
+}
 $kernel->terminate($request, $response);
 $kernel->shutdown();

@@ -12,14 +12,19 @@ use Doctrine\DBAL\Driver\Statement;
 /** @internal */
 final class SqlConnection extends AbstractConnectionMiddleware
 {
-    public function __construct(Connection $connection, private readonly SqlHistory $history) { parent::__construct($connection); }
+    public function __construct(Connection $connection, private readonly SqlHistory $history)
+    {
+        parent::__construct($connection);
+    }
     public function prepare(string $sql): Statement
     {
         $measurement = $this->history->start();
         try {
             return new SqlStatement(parent::prepare($sql), $this->history, $sql);
         } catch (\Throwable $error) {
-            if ($measurement !== null) { $this->history->record($measurement, $sql, 'prepare', $error); }
+            if ($measurement !== null) {
+                $this->history->record($measurement, $sql, 'prepare', $error);
+            }
             throw $error;
         }
     }
@@ -27,16 +32,30 @@ final class SqlConnection extends AbstractConnectionMiddleware
     {
         $measurement = $this->history->start();
         $error = null;
-        try { return parent::query($sql); }
-        catch (\Throwable $failure) { $error = $failure; throw $failure; }
-        finally { if ($measurement !== null) { $this->history->record($measurement, $sql, 'query', $error); } }
+        try {
+            return parent::query($sql);
+        } catch (\Throwable $failure) {
+            $error = $failure;
+            throw $failure;
+        } finally {
+            if ($measurement !== null) {
+                $this->history->record($measurement, $sql, 'query', $error);
+            }
+        }
     }
     public function exec(string $sql): int|string
     {
         $measurement = $this->history->start();
         $error = null;
-        try { return parent::exec($sql); }
-        catch (\Throwable $failure) { $error = $failure; throw $failure; }
-        finally { if ($measurement !== null) { $this->history->record($measurement, $sql, 'exec', $error); } }
+        try {
+            return parent::exec($sql);
+        } catch (\Throwable $failure) {
+            $error = $failure;
+            throw $failure;
+        } finally {
+            if ($measurement !== null) {
+                $this->history->record($measurement, $sql, 'exec', $error);
+            }
+        }
     }
 }

@@ -9,7 +9,9 @@ use Symfony\Component\Config\Definition\ConfigurationInterface;
 
 final class Configuration implements ConfigurationInterface
 {
-    public function __construct(private readonly bool $debug = false) {}
+    public function __construct(private readonly bool $debug = false)
+    {
+    }
 
     public function getConfigTreeBuilder(): TreeBuilder
     {

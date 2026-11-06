@@ -1,8 +1,11 @@
 <?php
+
 namespace ModernORM\Bundle\Example\Observability\Entity;
+
 use ModernORM\Mapping as ORM;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
+
 #[ORM\Entity]
 #[ORM\Table(name: 'morm_otel_order')]
 class Order
@@ -13,5 +16,8 @@ class Order
     public Customer $customer;
     #[ORM\OneToMany(targetEntity: Line::class, mappedBy: 'order', batchSize: 32)]
     public Collection $lines;
-    public function __construct() { $this->lines = new ArrayCollection(); }
+    public function __construct()
+    {
+        $this->lines = new ArrayCollection();
+    }
 }

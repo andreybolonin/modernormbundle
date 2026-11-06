@@ -1,0 +1,7 @@
+includes:
+    - phpstan.neon.dist
+parameters:
+    paths:
+        - tools/core-compatibility
+    bootstrapFiles:
+        - tools/core-compatibility/bootstrap.php

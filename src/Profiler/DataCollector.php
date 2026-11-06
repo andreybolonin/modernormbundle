@@ -23,7 +23,8 @@ final class DataCollector extends BaseCollector
         private readonly string $environment = '',
         private readonly ?string $serverVersion = null,
         private readonly bool $advisorEnabled = true,
-    ) {}
+    ) {
+    }
 
     public function collect(Request $request, Response $response, ?\Throwable $exception = null): void
     {
@@ -45,39 +46,85 @@ final class DataCollector extends BaseCollector
             ? ($this->advisor ?? new PerformanceAdvisor())->analyze($metrics, $this->data['queries'], $l2, $this->data['queriesDropped'], $events, $this->data['dropped']) : [];
     }
 
-    public function getName(): string { return 'modernorm'; }
-    public function isEnabled(): bool { return $this->data['enabled'] ?? false; }
-    public function getSnapshot(): Snapshot { return $this->data['snapshot'] ?? new Snapshot(0, 0, 0, 0, 0, 0); }
-    public function getMetrics(): array { return $this->data['metrics'] ?? ProfileView::metrics($this->getSnapshot(), $this->getEvents()); }
-    public function getRuntime(): array { return $this->data['runtime'] ?? ['environment' => 'unknown', 'configuredServerVersion' => null, 'coreVersion' => 'unknown', 'phpVersion' => null]; }
-    public function getL2(): array { return $this->data['l2'] ?? ['enabled' => false, 'hits' => 0, 'misses' => 0, 'puts' => 0, 'evictions' => 0]; }
+    public function getName(): string
+    {
+        return 'modernorm';
+    }
+    public function isEnabled(): bool
+    {
+        return $this->data['enabled'] ?? false;
+    }
+    public function getSnapshot(): Snapshot
+    {
+        return $this->data['snapshot'] ?? new Snapshot(0, 0, 0, 0, 0, 0);
+    }
+    public function getMetrics(): array
+    {
+        return $this->data['metrics'] ?? ProfileView::metrics($this->getSnapshot(), $this->getEvents());
+    }
+    public function getRuntime(): array
+    {
+        return $this->data['runtime'] ?? ['environment' => 'unknown', 'configuredServerVersion' => null, 'coreVersion' => 'unknown', 'phpVersion' => null];
+    }
+    public function getL2(): array
+    {
+        return $this->data['l2'] ?? ['enabled' => false, 'hits' => 0, 'misses' => 0, 'puts' => 0, 'evictions' => 0];
+    }
     public function getL2HitRate(): ?float
     {
-        $cache = $this->getL2(); $lookups = $cache['hits'] + $cache['misses'];
+        $cache = $this->getL2();
+        $lookups = $cache['hits'] + $cache['misses'];
         return $cache['enabled'] && $lookups > 0 ? 100 * $cache['hits'] / $lookups : null;
     }
-    public function getEvents(): array { return $this->data['events'] ?? []; }
+    public function getEvents(): array
+    {
+        return $this->data['events'] ?? [];
+    }
     public function getEventRows(?string $kind = null): array
     {
         $rows = ProfileView::events($this->getEvents());
         return $kind === null ? $rows : array_values(array_filter($rows, static fn (array $row): bool => $row['kind'] === $kind));
     }
-    public function getDropped(): int { return $this->data['dropped'] ?? 0; }
-    public function isSqlEnabled(): bool { return $this->data['sqlEnabled'] ?? false; }
-    public function getQueries(): array { return $this->data['queries'] ?? []; }
-    public function getQueriesDropped(): int { return $this->data['queriesDropped'] ?? 0; }
-    public function getFindings(): array { return $this->data['findings'] ?? []; }
-    public function isAdvisorEnabled(): bool { return $this->data['advisorEnabled'] ?? false; }
+    public function getDropped(): int
+    {
+        return $this->data['dropped'] ?? 0;
+    }
+    public function isSqlEnabled(): bool
+    {
+        return $this->data['sqlEnabled'] ?? false;
+    }
+    public function getQueries(): array
+    {
+        return $this->data['queries'] ?? [];
+    }
+    public function getQueriesDropped(): int
+    {
+        return $this->data['queriesDropped'] ?? 0;
+    }
+    public function getFindings(): array
+    {
+        return $this->data['findings'] ?? [];
+    }
+    public function isAdvisorEnabled(): bool
+    {
+        return $this->data['advisorEnabled'] ?? false;
+    }
     public function getFilteredQueries(string $filter = '', bool $errorsOnly = false): array
     {
-        $filter = substr($filter, 0, 200); $result = [];
+        $filter = substr($filter, 0, 200);
+        $result = [];
         foreach ($this->getQueries() as $index => $query) {
-            if (($errorsOnly && !$query['failed']) || ($filter !== '' && stripos($query['sql'], $filter) === false)) { continue; }
+            if (($errorsOnly && !$query['failed']) || ($filter !== '' && stripos($query['sql'], $filter) === false)) {
+                continue;
+            }
             $result[] = $query + ['index' => $index + 1];
         }
         return $result;
     }
-    public function getRepeatedQueries(): array { return ProfileView::repeatedQueries($this->getQueries()); }
+    public function getRepeatedQueries(): array
+    {
+        return ProfileView::repeatedQueries($this->getQueries());
+    }
     public function getSlowestQueries(): array
     {
         $queries = $this->getFilteredQueries();
@@ -101,7 +148,8 @@ final class DataCollector extends BaseCollector
             $groups[$key]['selected'] += $event['selectedReferences'] + $event['selectedCollections'];
             $groups[$key]['configuredMax'] = max($groups[$key]['configuredMax'], $event['configuredSize']);
             $groups[$key]['timeMs'] += $event['timeMs'];
-            $groups[$key]['hits'] += $event['cacheHits']; $groups[$key]['misses'] += $event['cacheMisses'];
+            $groups[$key]['hits'] += $event['cacheHits'];
+            $groups[$key]['misses'] += $event['cacheMisses'];
         }
         return array_values($groups);
     }
@@ -109,11 +157,16 @@ final class DataCollector extends BaseCollector
     {
         $groups = [];
         foreach ($this->getEventRows('hydration') as $event) {
-            if ($event['hydration'] === null) { continue; }
-            $details = $event['hydration']; $key = $details['hydrator'];
+            if ($event['hydration'] === null) {
+                continue;
+            }
+            $details = $event['hydration'];
+            $key = $details['hydrator'];
             $groups[$key] ??= ['hydrator' => $key, 'count' => 0, 'rows' => 0, 'entitiesCreated' => 0, 'timeMs' => 0.0, 'incomplete' => 0];
-            ++$groups[$key]['count']; $groups[$key]['rows'] += $details['rows'];
-            $groups[$key]['entitiesCreated'] += $details['entitiesCreated']; $groups[$key]['timeMs'] += $event['timeMs'];
+            ++$groups[$key]['count'];
+            $groups[$key]['rows'] += $details['rows'];
+            $groups[$key]['entitiesCreated'] += $details['entitiesCreated'];
+            $groups[$key]['timeMs'] += $event['timeMs'];
             $groups[$key]['incomplete'] += (int) !$details['completed'];
         }
         return array_values($groups);

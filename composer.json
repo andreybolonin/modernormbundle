@@ -12,14 +12,17 @@
         "symfony/console": "^7.4 || ^8.0"
     },
     "require-dev": {
+        "doctrine/data-fixtures": "^2.2",
+        "doctrine/migrations": "^3.9",
+        "friendsofphp/php-cs-fixer": "^3.90",
+        "open-telemetry/api": "^1.11",
+        "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^11.5",
-        "symfony/web-profiler-bundle": "^7.4 || ^8.0",
-        "symfony/twig-bundle": "^7.4 || ^8.0",
         "symfony/browser-kit": "^7.4 || ^8.0",
         "symfony/css-selector": "^7.4 || ^8.0",
         "symfony/messenger": "^7.4 || ^8.0",
-        "doctrine/migrations": "^3.9",
-        "doctrine/data-fixtures": "^2.2"
+        "symfony/twig-bundle": "^7.4 || ^8.0",
+        "symfony/web-profiler-bundle": "^7.4 || ^8.0"
     },
     "suggest": {
         "symfony/web-profiler-bundle": "Displays ModernORM metrics in the Symfony toolbar and Profiler.",
@@ -45,7 +48,15 @@
         }
     },
     "scripts": {
-        "test": "phpunit"
+        "test": "phpunit",
+        "analyse": "@php vendor/bin/phpstan analyse --configuration=phpstan.neon.dist --memory-limit=1G --no-progress",
+        "analyse:core": "@php vendor/bin/phpstan analyse --configuration=phpstan-core.neon.dist --memory-limit=1G --no-progress",
+        "cs:check": "@php vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.dist.php --dry-run --diff --sequential",
+        "cs:fix": "@php vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.dist.php --sequential",
+        "quality": [
+            "@analyse",
+            "@cs:check"
+        ]
     },
     "conflict": {
         "doctrine/migrations": "<3.9 || >=4.0",
@@ -74,7 +85,9 @@
             "/.env",
             "/.env.*",
             "/examples/observability/vendor",
-            "/examples/observability/.runtime"
+            "/examples/observability/.runtime",
+            "/.phpstan-cache",
+            "/.php-cs-fixer.cache"
         ]
     }
 }

@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+
 namespace ModernORM\Bundle\Example\Observability\Tests;
 
 use ModernORM\Bundle\Observability\OpenTelemetry\FlushMetrics;
@@ -27,7 +28,15 @@ final class OperationMetricsTest extends TestCase
     {
         $points = [];
         foreach ($exporter->collect() as $metric) {
-            if ($metric->name === $name) { foreach ($metric->data->dataPoints as $point) { $points[] = $point; } }
+            if ($metric->name === $name) {
+                $data = $metric->data;
+                if (!$data instanceof \OpenTelemetry\SDK\Metrics\Data\Sum && !$data instanceof \OpenTelemetry\SDK\Metrics\Data\Histogram) {
+                    self::fail('Expected counter or histogram metric data.');
+                }
+                foreach ($data->dataPoints as $point) {
+                    $points[] = $point;
+                }
+            }
         }
         return $points;
     }
@@ -113,11 +122,16 @@ final class OperationMetricsTest extends TestCase
 
     public function testFlushFailureDoesNotEscapeIntoTheApplication(): void
     {
-        $listener = new FlushMetrics(static function (): bool { throw new \RuntimeException('private transport exception'); });
+        $listener = new FlushMetrics(static function (): bool {
+            throw new \RuntimeException('private transport exception');
+        });
         self::assertFalse($listener->flush());
         self::assertSame(1, $listener->failures());
         $calls = 0;
-        $listener = new FlushMetrics(static function () use (&$calls): bool { ++$calls; return true; });
+        $listener = new FlushMetrics(static function () use (&$calls): bool {
+            ++$calls;
+            return true;
+        });
         self::assertTrue($listener->flush());
         self::assertSame(1, $calls);
         self::assertSame(0, $listener->failures());

@@ -29,7 +29,9 @@ final class EntityManagerFactory implements \Symfony\Contracts\Service\ResetInte
 
     private ?EntityManager $manager = null;
 
-    public function __construct(private readonly Connection $connection, private readonly Configuration $configuration, private readonly EventManager $events) {}
+    public function __construct(private readonly Connection $connection, private readonly Configuration $configuration, private readonly EventManager $events)
+    {
+    }
 
     public function create(): EntityManager
     {
@@ -43,7 +45,9 @@ final class EntityManagerFactory implements \Symfony\Contracts\Service\ResetInte
 
     public function reset(): void
     {
-        if ($this->manager === null) { return; }
+        if ($this->manager === null) {
+            return;
+        }
         $reflection = new \ReflectionClass(EntityManager::class);
         try {
             if (!$reflection->isUninitializedLazyObject($this->manager) && $this->manager->isOpen()) {

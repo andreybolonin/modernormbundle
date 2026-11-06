@@ -10,6 +10,8 @@ if (!$core || !is_file($core.'/src/Bulk/BulkExecutor.php')) {
 spl_autoload_register(static function (string $class) use ($core): void {
     if (str_starts_with($class, 'ModernORM\\') && !str_starts_with($class, 'ModernORM\\Bundle\\')) {
         $file = $core.'/src/'.str_replace('\\', '/', substr($class, 10)).'.php';
-        if (is_file($file)) { require $file; }
+        if (is_file($file)) {
+            require $file;
+        }
     }
 }, true, true);

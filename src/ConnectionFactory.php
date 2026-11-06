@@ -24,7 +24,9 @@ final class ConnectionFactory
         }
         $config = new Configuration();
         $middlewares = [new Middleware($statistics)];
-        if ($sqlHistory?->isEnabled()) { $middlewares[] = new \ModernORM\Bundle\Profiler\SqlMiddleware($sqlHistory); }
+        if ($sqlHistory?->isEnabled()) {
+            $middlewares[] = new \ModernORM\Bundle\Profiler\SqlMiddleware($sqlHistory);
+        }
         $config->setMiddlewares($middlewares);
         return DriverManager::getConnection($params, $config);
     }

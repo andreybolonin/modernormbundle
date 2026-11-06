@@ -1,6 +1,9 @@
 <?php
+
 namespace ModernORM\Bundle\Example\Observability\Entity;
+
 use ModernORM\Mapping as ORM;
+
 #[ORM\Entity]
 #[ORM\Table(name: 'morm_otel_product')]
 #[ORM\Cacheable(ttl: 60, writePolicy: \ModernORM\Cache\CacheWritePolicy::INVALIDATE)]

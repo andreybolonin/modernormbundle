@@ -30,9 +30,15 @@ final class Kernel extends BaseKernel
     {
         yield new FrameworkBundle();
         yield new ModernORMBundle();
-        if ($this->ui) { yield new TwigBundle(); yield new WebProfilerBundle(); }
+        if ($this->ui) {
+            yield new TwigBundle();
+            yield new WebProfilerBundle();
+        }
     }
-    public function getProjectDir(): string { return dirname(__DIR__, 2); }
+    public function getProjectDir(): string
+    {
+        return dirname(__DIR__, 2);
+    }
     private ?string $fixtureHash = null;
     public function getCacheDir(): string
     {
@@ -41,21 +47,30 @@ final class Kernel extends BaseKernel
             $files = [__FILE__, $root.'/composer.lock', (new \ReflectionClass(Statistics::class))->getFileName()];
             foreach (['src', 'templates'] as $directory) {
                 foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root.'/'.$directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
-                    if ($file->isFile()) { $files[] = $file->getPathname(); }
+                    if ($file->isFile()) {
+                        $files[] = $file->getPathname();
+                    }
                 }
             }
             sort($files);
             $hash = hash_init('sha256');
-            foreach ($files as $file) { hash_update_file($hash, $file); }
+            foreach ($files as $file) {
+                hash_update_file($hash, $file);
+            }
             $this->fixtureHash = substr(hash_final($hash), 0, 12);
         }
         return sys_get_temp_dir().'/modernorm-bundle-tests/'.$this->fixtureHash.'/'.(int)$this->profiling.(int)$this->statistics.(int)$this->ui.(int)$this->sql;
     }
-    public function getLogDir(): string { return $this->getCacheDir().'/log'; }
+    public function getLogDir(): string
+    {
+        return $this->getCacheDir().'/log';
+    }
     protected function configureContainer(ContainerConfigurator $container): void
     {
         $framework = ['secret' => 'test', 'test' => true, 'router' => ['utf8' => true]];
-        if ($this->ui) { $framework['profiler'] = ['enabled' => true, 'collect' => $this->profiling]; }
+        if ($this->ui) {
+            $framework['profiler'] = ['enabled' => true, 'collect' => $this->profiling];
+        }
         $container->extension('framework', $framework);
         $container->extension('modernorm', [
             'url' => getenv('MODERNORM_TEST_URL') ?: 'postgresql://localhost/modernorm_test', 'server_version' => '17',
@@ -65,7 +80,7 @@ final class Kernel extends BaseKernel
             'l2_cache' => ['pool' => 'cache.app'],
         ]);
         $container->services()->set('test.sql_controller', SqlController::class)->public()->args([new \Symfony\Component\DependencyInjection\Reference('modernorm.connection')]);
-        $container->services()->set('test.orm_controller', OrmController::class)->public()->args([new \Symfony\Component\DependencyInjection\Reference('modernorm.entity_manager'), new \Symfony\Component\DependencyInjection\Reference('modernorm.cache_logger')]);
+        $container->services()->set('test.orm_controller', OrmController::class)->public()->args([new \Symfony\Component\DependencyInjection\Reference('modernorm.entity_manager')]);
         $container->services()->set('test.nested_controller', NestedController::class)->public()->args([new \Symfony\Component\DependencyInjection\Reference('http_kernel')]);
         if ($this->ui) {
             $container->extension('twig', ['strict_variables' => true]);
@@ -94,13 +109,24 @@ final class Kernel extends BaseKernel
 
 final class MetricsController
 {
-    public function __construct(private readonly Statistics $statistics, private readonly StatisticsCacheLogger $logger) {}
-    public static function empty(): Response { return new Response('<html><body>empty</body></html>'); }
+    public function __construct(private readonly Statistics $statistics, private readonly StatisticsCacheLogger $logger)
+    {
+    }
+    public static function empty(): Response
+    {
+        return new Response('<html><body>empty</body></html>');
+    }
     public function __invoke(): Response
     {
-        if (($measurement = $this->statistics->start()) !== null) { $this->statistics->recordSql($measurement, false); }
-        if (($measurement = $this->statistics->start()) !== null) { $this->statistics->recordFlush($measurement, true); }
-        if (($batch = $this->statistics->startBatch(BatchKind::ONE_TO_MANY, 'Order', 'Order::items', 32, 5)) !== null) { $this->statistics->recordBatch($batch, false); }
+        if (($measurement = $this->statistics->start()) !== null) {
+            $this->statistics->recordSql($measurement, false);
+        }
+        if (($measurement = $this->statistics->start()) !== null) {
+            $this->statistics->recordFlush($measurement, true);
+        }
+        if (($batch = $this->statistics->startBatch(BatchKind::ONE_TO_MANY, 'Order', 'Order::items', 32, 5)) !== null) {
+            $this->statistics->recordBatch($batch, false);
+        }
         $this->statistics->recordBatchFallback(BatchKind::MANY_TO_ONE, BatchFallbackReason::SIZE_ONE, 'Product', null, 1);
         $this->logger->hit('Product');
         $this->logger->miss('Product');
@@ -110,7 +136,9 @@ final class MetricsController
 
 final class NestedController
 {
-    public function __construct(private readonly \Symfony\Component\HttpKernel\HttpKernelInterface $kernel) {}
+    public function __construct(private readonly \Symfony\Component\HttpKernel\HttpKernelInterface $kernel)
+    {
+    }
     public function __invoke(): Response
     {
         $this->kernel->handle(\Symfony\Component\HttpFoundation\Request::create('/metrics'), \Symfony\Component\HttpKernel\HttpKernelInterface::SUB_REQUEST);
@@ -121,12 +149,20 @@ final class NestedController
 
 final class SqlController
 {
-    public function __construct(private readonly \Doctrine\DBAL\Connection $connection) {}
+    public function __construct(private readonly \Doctrine\DBAL\Connection $connection)
+    {
+    }
     public function __invoke(): Response
     {
         $statement = $this->connection->prepare('SELECT CAST(? AS TEXT) AS value');
-        for ($i = 0; $i < 3; ++$i) { $statement->bindValue(1, 'private-binding-'.$i); $statement->executeQuery()->fetchOne(); }
-        try { $this->connection->executeQuery('SELECT 1 / 0'); } catch (\Doctrine\DBAL\Exception) {}
+        for ($i = 0; $i < 3; ++$i) {
+            $statement->bindValue(1, 'private-binding-'.$i);
+            $statement->executeQuery()->fetchOne();
+        }
+        try {
+            $this->connection->executeQuery('SELECT 1 / 0');
+        } catch (\Doctrine\DBAL\Exception) {
+        }
         $this->connection->executeStatement('SELECT 7');
         return new Response('<html><body>SQL</body></html>');
     }
@@ -134,7 +170,9 @@ final class SqlController
 
 final class OrmController
 {
-    public function __construct(private readonly \ModernORM\EntityManagerInterface $manager, private readonly StatisticsCacheLogger $logger) {}
+    public function __construct(private readonly \ModernORM\EntityManagerInterface $manager)
+    {
+    }
     public function __invoke(): Response
     {
         $em = $this->manager;
@@ -146,15 +184,38 @@ final class OrmController
             'CREATE TEMP TABLE mb_line (id INT PRIMARY KEY, name VARCHAR(255) NOT NULL, order_id INT NOT NULL)',
             'CREATE TEMP TABLE mb_order_tag (order_id INT NOT NULL, tag_id INT NOT NULL, PRIMARY KEY (order_id, tag_id))',
             'CREATE TEMP TABLE mb_reference (id INT PRIMARY KEY, name VARCHAR(255) NOT NULL)',
-        ] as $sql) { $db->executeStatement($sql); }
+        ] as $sql) {
+            $db->executeStatement($sql);
+        }
         $orders = [];
         for ($i = 1; $i <= 3; ++$i) {
-            $customer = new Entity\Customer(); $customer->id = $i; $customer->name = 'Customer '.$i; $em->persist($customer);
-            $tag = new Entity\Tag(); $tag->id = $i; $tag->name = 'Tag '.$i; $em->persist($tag);
-            $order = new Entity\Order(); $order->id = $i; $order->name = 'Order '.$i; $order->customer = $customer; $order->tags->add($tag); $em->persist($order); $orders[] = $order;
-            if ($i < 3) { $line = new Entity\Line(); $line->id = $i; $line->name = 'Line '.$i; $line->order = $order; $em->persist($line); }
+            $customer = new Entity\Customer();
+            $customer->id = $i;
+            $customer->name = 'Customer '.$i;
+            $em->persist($customer);
+            $tag = new Entity\Tag();
+            $tag->id = $i;
+            $tag->name = 'Tag '.$i;
+            $em->persist($tag);
+            $order = new Entity\Order();
+            $order->id = $i;
+            $order->name = 'Order '.$i;
+            $order->customer = $customer;
+            $order->tags->add($tag);
+            $em->persist($order);
+            $orders[] = $order;
+            if ($i < 3) {
+                $line = new Entity\Line();
+                $line->id = $i;
+                $line->name = 'Line '.$i;
+                $line->order = $order;
+                $em->persist($line);
+            }
         }
-        $reference = new Entity\ReferenceItem(); $reference->id = 1; $reference->name = 'before'; $em->persist($reference);
+        $reference = new Entity\ReferenceItem();
+        $reference->id = 1;
+        $reference->name = 'before';
+        $em->persist($reference);
         $em->flush();
         $em->clear();
         $orders = $em->getRepository(Entity\Order::class)->findBy([], ['id' => 'ASC']);
@@ -166,15 +227,23 @@ final class OrmController
         $reference = $em->find(Entity\ReferenceItem::class, 1); // miss + put
         $em->clear();
         $reference = $em->find(Entity\ReferenceItem::class, 1); // hit
-        $reference->name = 'after'; $em->flush(); // update + invalidate
+        $reference->name = 'after';
+        $em->flush(); // update + invalidate
         $em->clear();
         $updated = $em->find(Entity\ReferenceItem::class, 1)->name;
-        $em->remove($em->find(Entity\ReferenceItem::class, 1)); $em->flush();
+        $em->remove($em->find(Entity\ReferenceItem::class, 1));
+        $em->flush();
         $em->clear();
         $deleted = $em->find(Entity\ReferenceItem::class, 1) === null;
         // A real failed flush closes the manager. The next kernel/job reset must restore it.
-        $duplicate = new Entity\Customer(); $duplicate->id = 1; $duplicate->name = 'duplicate'; $em->persist($duplicate);
-        try { $em->flush(); } catch (\Doctrine\DBAL\Exception) {}
+        $duplicate = new Entity\Customer();
+        $duplicate->id = 1;
+        $duplicate->name = 'duplicate';
+        $em->persist($duplicate);
+        try {
+            $em->flush();
+        } catch (\Doctrine\DBAL\Exception) {
+        }
         return new \Symfony\Component\HttpFoundation\JsonResponse(['customers' => $customers, 'lines' => $lines, 'tags' => $tags, 'updated' => $updated, 'deleted' => $deleted, 'closedAfterFailure' => !$em->isOpen()]);
     }
 }

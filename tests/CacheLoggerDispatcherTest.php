@@ -17,7 +17,9 @@ final class CacheLoggerDispatcherTest extends TestCase
         $process = new StatisticsCacheLogger();
         $dispatcher = new CacheLoggerDispatcher($request, [$process]);
         foreach ([1, 2] as $job) {
-            foreach (['hit', 'miss', 'put', 'evict'] as $operation) { $dispatcher->$operation('Product'); }
+            foreach (['hit', 'miss', 'put', 'evict'] as $operation) {
+                $dispatcher->$operation('Product');
+            }
             foreach (['getHitCount', 'getMissCount', 'getPutCount', 'getEvictionCount'] as $getter) {
                 self::assertSame(1, $request->$getter());
                 self::assertSame($job, $process->$getter());
@@ -31,14 +33,28 @@ final class CacheLoggerDispatcherTest extends TestCase
     {
         $request = new StatisticsCacheLogger();
         $healthy = new StatisticsCacheLogger();
-        $broken = new class implements CacheLogger {
-            public function hit(string $entity): void { throw new \RuntimeException('private telemetry failure'); }
-            public function miss(string $entity): void { $this->hit($entity); }
-            public function put(string $entity): void { $this->hit($entity); }
-            public function evict(string $entity): void { $this->hit($entity); }
+        $broken = new class () implements CacheLogger {
+            public function hit(string $entity): void
+            {
+                throw new \RuntimeException('private telemetry failure');
+            }
+            public function miss(string $entity): void
+            {
+                $this->hit($entity);
+            }
+            public function put(string $entity): void
+            {
+                $this->hit($entity);
+            }
+            public function evict(string $entity): void
+            {
+                $this->hit($entity);
+            }
         };
         $dispatcher = new CacheLoggerDispatcher($request, [$broken, $healthy]);
-        foreach (['hit', 'miss', 'put', 'evict'] as $operation) { $dispatcher->$operation('Product'); }
+        foreach (['hit', 'miss', 'put', 'evict'] as $operation) {
+            $dispatcher->$operation('Product');
+        }
         foreach (['getHitCount', 'getMissCount', 'getPutCount', 'getEvictionCount'] as $getter) {
             self::assertSame(1, $request->$getter());
             self::assertSame(1, $healthy->$getter());
@@ -48,14 +64,12 @@ final class CacheLoggerDispatcherTest extends TestCase
 
     public function testLazyServicesAreResolvedBeforeTheFirstCacheCallback(): void
     {
-        $initialized = false;
         $logger = new StatisticsCacheLogger();
-        $loggers = (static function () use (&$initialized, $logger): iterable {
-            $initialized = true;
+        $loggers = (static function () use ($logger): iterable {
             yield $logger;
         })();
         $dispatcher = new CacheLoggerDispatcher(new StatisticsCacheLogger(), $loggers);
-        self::assertTrue($initialized);
+        self::assertFalse($loggers->valid());
         $dispatcher->hit('Product');
         $dispatcher->hit('Product');
         self::assertSame(2, $logger->getHitCount());

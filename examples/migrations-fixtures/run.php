@@ -49,8 +49,11 @@ class DemoDriver extends AttributeDriver
 {
     public function __construct(private readonly string $schema)
     {
-        parent::__construct(new class implements \Doctrine\Persistence\Mapping\Driver\ClassLocator {
-            public function getClassNames(): array { return [Country::class, City::class]; }
+        parent::__construct(new class () implements \Doctrine\Persistence\Mapping\Driver\ClassLocator {
+            public function getClassNames(): array
+            {
+                return [Country::class, City::class];
+            }
         });
     }
     public function loadMetadataForClass(string $className, \Doctrine\Persistence\Mapping\ClassMetadata $metadata): void
@@ -74,7 +77,10 @@ class CountryFixture extends Fixture
 
 class CityFixture extends Fixture implements DependentFixtureInterface
 {
-    public function getDependencies(): array { return [CountryFixture::class]; }
+    public function getDependencies(): array
+    {
+        return [CountryFixture::class];
+    }
     public function load(ObjectManager $manager): void
     {
         $city = new City();
@@ -111,7 +117,9 @@ try {
         $command = new Command($inner, $scope, $manager, $cache, $name === 'migrate');
         $input = new ArrayInput([]);
         $input->setInteractive(false);
-        if ($command->run($input, $output) !== 0) { throw new \RuntimeException('Migration command failed: '.$name); }
+        if ($command->run($input, $output) !== 0) {
+            throw new \RuntimeException('Migration command failed: '.$name);
+        }
     }
     $factory = DependencyFactoryFactory::create($connection, $scope, $paths, $schema.'.migration_versions', true);
     try {
@@ -125,9 +133,13 @@ try {
     $output->writeln('Fixture loaded: '.$city->name.' / '.$city->country->name);
     $output->writeln('<info>Completed: empty schema -> migration -> empty diff -> atomic fixtures.</info>');
 } finally {
-    while ($connection->isTransactionActive()) { $connection->rollBack(); }
+    while ($connection->isTransactionActive()) {
+        $connection->rollBack();
+    }
     $connection->executeStatement('DROP SCHEMA '.$schema.' CASCADE');
     $connection->close();
-    foreach (glob($directory.'/*') as $file) { unlink($file); }
+    foreach (glob($directory.'/*') as $file) {
+        unlink($file);
+    }
     rmdir($directory);
 }

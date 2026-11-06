@@ -30,9 +30,18 @@ final class PerformanceAdvisorLoadingTest extends TestCase
 
     private function batch(?string $association = 'Order::lines', string $entity = 'Line', int $size = 32, int $selected = 1, bool $failed = false, BatchKind $kind = BatchKind::ONE_TO_MANY, int $duration = 2_000_000): OperationEvent
     {
-        return new OperationEvent(OperationKind::BATCH, 1, $duration, $failed, $kind, $entity, $association, $size,
+        return new OperationEvent(
+            OperationKind::BATCH,
+            1,
+            $duration,
+            $failed,
+            $kind,
+            $entity,
+            $association,
+            $size,
             selectedReferences: $kind === BatchKind::MANY_TO_ONE ? $selected : 0,
-            selectedCollections: $kind === BatchKind::MANY_TO_ONE ? 0 : $selected);
+            selectedCollections: $kind === BatchKind::MANY_TO_ONE ? 0 : $selected
+        );
     }
 
     private function fallback(?string $association = 'Order::lines', string $entity = 'Line', BatchKind $kind = BatchKind::ONE_TO_MANY): OperationEvent
@@ -177,7 +186,8 @@ final class PerformanceAdvisorLoadingTest extends TestCase
         $collector = new DataCollector($statistics, new StatisticsCacheLogger(), $history, false, new SqlHistory(false, 0, 128));
         $collector->collect(Request::create('/'), new Response());
         $saved = unserialize(serialize($collector));
-        $statistics->reset(); $history->reset();
+        $statistics->reset();
+        $history->reset();
         self::assertSame($collector->getFindings(), $saved->getFindings());
         self::assertCount(2, $saved->getFindings());
         self::assertStringContainsString('Order::lines', $saved->getFindings()[1]['title']);

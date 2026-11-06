@@ -28,7 +28,11 @@ final class CacheMetricsTest extends TestCase
         $points = [];
         foreach ($exporter->collect() as $metric) {
             self::assertSame('modernorm.l2.operations', $metric->name);
-            foreach ($metric->data->dataPoints as $point) {
+            $data = $metric->data;
+            if (!$data instanceof \OpenTelemetry\SDK\Metrics\Data\Sum && !$data instanceof \OpenTelemetry\SDK\Metrics\Data\Histogram) {
+                self::fail('Expected counter or histogram metric data.');
+            }
+            foreach ($data->dataPoints as $point) {
                 $attributes = $point->attributes->toArray();
                 self::assertSame(['operation', 'entity'], array_keys($attributes));
                 $points[$attributes['entity']][$attributes['operation']] = $point->value;
@@ -40,8 +44,12 @@ final class CacheMetricsTest extends TestCase
     public function testEveryOperationHasBoundedLabelsWithoutLeakingUnknownClasses(): void
     {
         [$metrics, $provider, $exporter] = $this->metrics(['Domain\\Product' => 'product']);
-        foreach (['hit', 'miss', 'put', 'evict'] as $operation) { $metrics->$operation('Domain\\Product'); }
-        foreach (['Tenant42\\Secret', 'Tenant99\\Secret', 'request-123'] as $unknown) { $metrics->miss($unknown); }
+        foreach (['hit', 'miss', 'put', 'evict'] as $operation) {
+            $metrics->$operation('Domain\\Product');
+        }
+        foreach (['Tenant42\\Secret', 'Tenant99\\Secret', 'request-123'] as $unknown) {
+            $metrics->miss($unknown);
+        }
         self::assertTrue($provider->forceFlush());
         self::assertSame(['product' => ['hit' => 1, 'miss' => 1, 'put' => 1, 'invalidation' => 1], 'other' => ['miss' => 3]], $this->points($exporter));
         $provider->shutdown();
@@ -74,7 +82,10 @@ final class CacheMetricsTest extends TestCase
         [$metrics, $provider, $exporter] = $this->metrics();
         $request = new StatisticsCacheLogger();
         $dispatcher = new CacheLoggerDispatcher($request, [$metrics]);
-        for ($i = 0; $i < 3; ++$i) { $dispatcher->hit('PrivateClass'); $request->reset(); }
+        for ($i = 0; $i < 3; ++$i) {
+            $dispatcher->hit('PrivateClass');
+            $request->reset();
+        }
         $provider->forceFlush();
         self::assertSame(['other' => ['hit' => 3]], $this->points($exporter));
         $provider->shutdown();
@@ -98,18 +109,21 @@ final class CacheMetricsTest extends TestCase
         $provider->shutdown();
     }
 
-    public function testInvalidStaticLabelsFailAtConfigurationTime(): void
+    public static function invalidLabels(): array
+    {
+        return [[['Product' => '']], [['Product' => 'other']], [['Product' => 42]], [['' => 'product']], [['product']]];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('invalidLabels')]
+    public function testInvalidStaticLabelsFailAtConfigurationTime(array $labels): void
     {
         $provider = MeterProvider::builder()->build();
         try {
-            foreach ([['Product' => ''], ['Product' => 'other'], ['Product' => 42], ['' => 'product'], ['product']] as $labels) {
-                try {
-                    new CacheMetrics($provider->getMeter('modernorm'), $labels);
-                    self::fail('Invalid label configuration was accepted.');
-                } catch (\InvalidArgumentException $error) {
-                    self::assertStringContainsString('class-to-label', $error->getMessage());
-                }
-            }
-        } finally { $provider->shutdown(); }
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage('class-to-label');
+            new CacheMetrics($provider->getMeter('modernorm'), $labels);
+        } finally {
+            $provider->shutdown();
+        }
     }
 }

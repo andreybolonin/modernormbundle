@@ -1,8 +1,11 @@
 <?php
+
 namespace ModernORM\Bundle\Tests\Fixtures\Entity;
+
 use ModernORM\Mapping as ORM;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\Common\Collections\ArrayCollection;
+
 #[ORM\Entity]
 #[ORM\Table(name: 'mb_order')]
 class Order
@@ -18,5 +21,9 @@ class Order
     #[ORM\ManyToMany(targetEntity: Tag::class, batchSize: 32)]
     #[ORM\JoinTable(name: 'mb_order_tag', joinColumns: [new ORM\JoinColumn(name: 'order_id', referencedColumnName: 'id')], inverseJoinColumns: [new ORM\JoinColumn(name: 'tag_id', referencedColumnName: 'id')])]
     public Collection $tags;
-    public function __construct() { $this->lines = new ArrayCollection(); $this->tags = new ArrayCollection(); }
+    public function __construct()
+    {
+        $this->lines = new ArrayCollection();
+        $this->tags = new ArrayCollection();
+    }
 }

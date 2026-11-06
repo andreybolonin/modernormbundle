@@ -14,12 +14,18 @@ final class OperationHistoryTest extends TestCase
 {
     public function testExporterWorksWithoutAnHttpProfilerAndFailureIsIsolated(): void
     {
-        $exporter = new class implements OperationObserver {
+        $exporter = new class () implements OperationObserver {
             public int $calls = 0;
-            public function completed(OperationEvent $event): void { ++$this->calls; }
+            public function completed(OperationEvent $event): void
+            {
+                ++$this->calls;
+            }
         };
-        $broken = new class implements OperationObserver {
-            public function completed(OperationEvent $event): void { throw new \RuntimeException('exporter unavailable'); }
+        $broken = new class () implements OperationObserver {
+            public function completed(OperationEvent $event): void
+            {
+                throw new \RuntimeException('exporter unavailable');
+            }
         };
         $history = new OperationHistory(2, null, [$broken, $exporter]);
         $statistics = new Statistics(true, $history);

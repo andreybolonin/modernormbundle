@@ -21,7 +21,8 @@ final class BundleTest extends TestCase
     private mixed $previousHandler;
     protected function setUp(): void
     {
-        $this->previousHandler = set_exception_handler(static function (\Throwable $error): void {});
+        $this->previousHandler = set_exception_handler(static function (\Throwable $error): void {
+        });
         restore_exception_handler();
     }
     protected function tearDown(): void
@@ -29,9 +30,12 @@ final class BundleTest extends TestCase
         $this->kernel?->shutdown();
         // FrameworkBundle installs Symfony ErrorHandler even without a Runtime bootstrap.
         for ($i = 0; $i < 10; ++$i) {
-            $current = set_exception_handler(static function (\Throwable $error): void {});
+            $current = set_exception_handler(static function (\Throwable $error): void {
+            });
             restore_exception_handler();
-            if ($current === $this->previousHandler) { break; }
+            if ($current === $this->previousHandler) {
+                break;
+            }
             restore_exception_handler();
         }
     }
@@ -150,7 +154,9 @@ final class BundleTest extends TestCase
     }
     public function testPostgreSQLMiddlewareAndTransactionCleanup(): void
     {
-        if (!getenv('MODERNORM_TEST_URL')) { self::markTestSkipped('Set MODERNORM_TEST_URL for PostgreSQL integration.'); }
+        if (!getenv('MODERNORM_TEST_URL')) {
+            self::markTestSkipped('Set MODERNORM_TEST_URL for PostgreSQL integration.');
+        }
         $kernel = $this->boot();
         $container = $kernel->getContainer()->get('test.service_container');
         $manager = $container->get('test.manager');
@@ -168,7 +174,9 @@ final class BundleTest extends TestCase
     }
     public function testSqlDetailsRepeatsLimitsErrorsAndSavedPanel(): void
     {
-        if (!getenv('MODERNORM_TEST_URL')) { self::markTestSkipped('Set MODERNORM_TEST_URL.'); }
+        if (!getenv('MODERNORM_TEST_URL')) {
+            self::markTestSkipped('Set MODERNORM_TEST_URL.');
+        }
         $kernel = $this->boot(true, true, true, true);
         [, $profile] = $this->request($kernel, '/sql');
         $collector = $profile->getCollector('modernorm');
@@ -190,7 +198,9 @@ final class BundleTest extends TestCase
     }
     public function testSqlHistoryRequiresActiveProfilerButNotStatistics(): void
     {
-        if (!getenv('MODERNORM_TEST_URL')) { self::markTestSkipped('Set MODERNORM_TEST_URL.'); }
+        if (!getenv('MODERNORM_TEST_URL')) {
+            self::markTestSkipped('Set MODERNORM_TEST_URL.');
+        }
         $kernel = $this->boot(false, true, true, true);
         $this->request($kernel, '/sql');
         $history = $kernel->getContainer()->get('test.service_container')->get('modernorm.profiler.sql_history');
@@ -203,7 +213,9 @@ final class BundleTest extends TestCase
     }
     public function testRealOrmBatchingL2CrudAndNextWorkerJobAfterFailedFlush(): void
     {
-        if (!getenv('MODERNORM_TEST_URL')) { self::markTestSkipped('Set MODERNORM_TEST_URL.'); }
+        if (!getenv('MODERNORM_TEST_URL')) {
+            self::markTestSkipped('Set MODERNORM_TEST_URL.');
+        }
         $kernel = $this->boot(true, true, true, true);
         [$response, $profile] = $this->request($kernel, '/orm');
         $values = json_decode($response->getContent(), true);
@@ -251,16 +263,22 @@ final class BundleTest extends TestCase
     }
     public function testRepeatedResetsPreserveAnUninitializedManager(): void
     {
-        if (!getenv('MODERNORM_TEST_URL')) { self::markTestSkipped('Set MODERNORM_TEST_URL.'); }
+        if (!getenv('MODERNORM_TEST_URL')) {
+            self::markTestSkipped('Set MODERNORM_TEST_URL.');
+        }
         $kernel = $this->boot(false, true, false);
         $container = $kernel->getContainer()->get('test.service_container');
         $manager = $container->get('test.manager');
         $reflection = new \ReflectionClass(\ModernORM\EntityManager::class);
         self::assertTrue($reflection->isUninitializedLazyObject($manager));
-        for ($i = 0; $i < 2; ++$i) { $kernel->getContainer()->get('services_resetter')->reset(); }
+        for ($i = 0; $i < 2; ++$i) {
+            $kernel->getContainer()->get('services_resetter')->reset();
+        }
         self::assertTrue($reflection->isUninitializedLazyObject($manager));
         self::assertSame(42, (int) $manager->getConnection()->fetchOne('SELECT 42'));
-        for ($i = 0; $i < 2; ++$i) { $kernel->getContainer()->get('services_resetter')->reset(); }
+        for ($i = 0; $i < 2; ++$i) {
+            $kernel->getContainer()->get('services_resetter')->reset();
+        }
         self::assertTrue($reflection->isUninitializedLazyObject($manager));
         self::assertTrue($manager->isOpen());
         self::assertSame(43, (int) $manager->getConnection()->fetchOne('SELECT 43'));

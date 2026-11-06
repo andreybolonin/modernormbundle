@@ -9,13 +9,21 @@ final class ProfileView
 {
     public static function values(mixed $value): mixed
     {
-        if ($value instanceof \BackedEnum) { return $value->value; }
-        if ($value instanceof \UnitEnum) { return $value->name; }
+        if ($value instanceof \BackedEnum) {
+            return $value->value;
+        }
+        if ($value instanceof \UnitEnum) {
+            return $value->name;
+        }
         if (is_object($value)) {
-            if (!str_starts_with($value::class, 'ModernORM\\Statistics\\')) { return null; }
+            if (!str_starts_with($value::class, 'ModernORM\\Statistics\\')) {
+                return null;
+            }
             $value = get_object_vars($value);
         }
-        if (is_array($value)) { return array_map(self::values(...), $value); }
+        if (is_array($value)) {
+            return array_map(self::values(...), $value);
+        }
         return is_scalar($value) || $value === null ? $value : null;
     }
 
@@ -32,10 +40,16 @@ final class ProfileView
                 $phases[$phase] = $timed(($s['unitOfWork']['byPhase'][$phase] ?? []) + ['count' => 0, 'errors' => 0, 'timeNanoseconds' => 0, 'last' => null]);
             }
             $managed = [];
-            foreach ($phases as $phase) { if ($phase['last'] !== null) { $managed[] = $phase['last']['managedEntities']; } }
+            foreach ($phases as $phase) {
+                if ($phase['last'] !== null) {
+                    $managed[] = $phase['last']['managedEntities'];
+                }
+            }
             foreach ($events as $event) {
                 $e = self::values($event);
-                if (isset($e['unitOfWork']['managedEntities'])) { $managed[] = $e['unitOfWork']['managedEntities']; }
+                if (isset($e['unitOfWork']['managedEntities'])) {
+                    $managed[] = $e['unitOfWork']['managedEntities'];
+                }
             }
             $work = ['phases' => $phases, 'observedManagedMax' => $managed === [] ? null : max($managed), 'lastWrites' => $phases['writes']['last']];
         }
@@ -64,18 +78,26 @@ final class ProfileView
         foreach ($events as $event) {
             $e = self::values($event);
             $kind = $e['kind'] ?? null;
-            if (!in_array($kind, ['batch', 'batch_fallback'], true) || ($e['failed'] ?? false)) { continue; }
+            if (!in_array($kind, ['batch', 'batch_fallback'], true) || ($e['failed'] ?? false)) {
+                continue;
+            }
             $association = $e['association'] ?? null;
             $entity = $e['entityClass'] ?? null;
-            if (($association === null || $association === '') && ($entity === null || $entity === '')) { continue; }
+            if (($association === null || $association === '') && ($entity === null || $entity === '')) {
+                continue;
+            }
             $size = $e['configuredSize'] ?? 0;
             $fallback = $kind === 'batch_fallback' && ($e['fallbackReason'] ?? null) === 'size_one' && $size === 1;
             $singleton = $kind === 'batch' && $size > 1 && ($e['selectedReferences'] ?? 0) + ($e['selectedCollections'] ?? 0) === 1;
-            if (!$fallback && !$singleton) { continue; }
+            if (!$fallback && !$singleton) {
+                continue;
+            }
             $key = hash('sha256', serialize([$e['batchKind'] ?? null, $entity, $association, $size]));
             $groups[$key] ??= ['id' => $key, 'kind' => $e['batchKind'] ?? 'unknown', 'entity' => $entity,
                 'association' => $association, 'configuredSize' => $size, 'fallbacks' => 0, 'singleLoads' => 0, 'singleTimeMs' => 0.0];
-            if ($fallback) { ++$groups[$key]['fallbacks']; }
+            if ($fallback) {
+                ++$groups[$key]['fallbacks'];
+            }
             if ($singleton) {
                 ++$groups[$key]['singleLoads'];
                 $groups[$key]['singleTimeMs'] += ($e['durationNanoseconds'] ?? 0) / 1_000_000;

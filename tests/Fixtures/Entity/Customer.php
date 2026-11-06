@@ -1,6 +1,9 @@
 <?php
+
 namespace ModernORM\Bundle\Tests\Fixtures\Entity;
+
 use ModernORM\Mapping as ORM;
+
 #[ORM\Entity]
 #[ORM\Table(name: 'mb_customer')]
 class Customer

@@ -19,11 +19,27 @@ final class Kernel extends BaseKernel
 {
     use MicroKernelTrait;
 
-    public function __construct() { parent::__construct('prototype', false); }
-    public function registerBundles(): iterable { yield new FrameworkBundle(); yield new ModernORMBundle(); }
-    public function getProjectDir(): string { return dirname(__DIR__); }
-    public function getCacheDir(): string { return getenv('MODERNORM_OTEL_CACHE_DIR') ?: sys_get_temp_dir().'/modernorm-otel-prototype-cache'; }
-    public function getLogDir(): string { return sys_get_temp_dir().'/modernorm-otel-prototype-log'; }
+    public function __construct()
+    {
+        parent::__construct('prototype', false);
+    }
+    public function registerBundles(): iterable
+    {
+        yield new FrameworkBundle();
+        yield new ModernORMBundle();
+    }
+    public function getProjectDir(): string
+    {
+        return dirname(__DIR__);
+    }
+    public function getCacheDir(): string
+    {
+        return getenv('MODERNORM_OTEL_CACHE_DIR') ?: sys_get_temp_dir().'/modernorm-otel-prototype-cache';
+    }
+    public function getLogDir(): string
+    {
+        return sys_get_temp_dir().'/modernorm-otel-prototype-log';
+    }
 
     protected function configureContainer(ContainerConfigurator $container): void
     {

@@ -40,23 +40,29 @@ final class OperationMetrics implements OperationObserver
         $operation = $event->kind->value;
         $attributes = ['operation' => $operation, 'outcome' => $event->failed ? 'error' : 'success'];
         if ($operation === 'batch_fallback') {
-            $this->fallbacks->add(1, ['reason' => $event->fallbackReason?->value ?? 'unknown']);
+            $this->fallbacks->add(1, ['reason' => $event->fallbackReason->value ?? 'unknown']);
             return;
         }
-        if ($event->batchKind !== null) { $attributes['association_kind'] = $event->batchKind->value; }
+        if ($event->batchKind !== null) {
+            $attributes['association_kind'] = $event->batchKind->value;
+        }
         if (($event->bulk ?? null) !== null) {
             $attributes['bulk_operation'] = $event->bulk->operation->value;
             $attributes['policy'] = $event->bulk->policy->name;
         }
-        if (($event->unitOfWork ?? null) !== null) { $attributes['phase'] = $event->unitOfWork->phase->value; }
+        if (($event->unitOfWork ?? null) !== null) {
+            $attributes['phase'] = $event->unitOfWork->phase->value;
+        }
         $this->operations->add(1, $attributes);
         $this->duration->record($event->durationNanoseconds / 1_000_000_000, $attributes);
         if ($operation === 'batch') {
-            $this->batchSize->record($event->selectedReferences + $event->selectedCollections, ['association_kind' => $event->batchKind?->value ?? 'unknown']);
+            $this->batchSize->record($event->selectedReferences + $event->selectedCollections, ['association_kind' => $event->batchKind->value ?? 'unknown']);
         }
         if (($event->bulk ?? null) !== null) {
             foreach (['input' => $event->bulk->inputRows, 'affected' => $event->bulk->affectedRows, 'returned' => $event->bulk->returnedRows] as $kind => $rows) {
-                if ($rows !== null) { $this->bulkRows->add($rows, $attributes + ['row_kind' => $kind]); }
+                if ($rows !== null) {
+                    $this->bulkRows->add($rows, $attributes + ['row_kind' => $kind]);
+                }
             }
         }
         if (($event->hydration ?? null) !== null) {
