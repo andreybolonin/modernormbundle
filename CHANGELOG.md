@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Rank Performance Advisor findings by severity and measured duration, disclose incomplete SQL samples, and add configurable hydration time/entity-count diagnostics with focused regression coverage.
+
 ## 0.1.0-beta.3 — 2026-11-05
 
 - Make repeated worker resets safe when the EntityManager lazy proxy has not been initialized since the preceding reset.

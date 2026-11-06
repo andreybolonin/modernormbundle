@@ -124,6 +124,10 @@ Bindings and exception messages are never stored by this SQL collector. Literal 
 
 Statistics default to `kernel.debug`. In production they can be enabled independently of the Profiler. With statistics disabled, no operation events are produced. If L2 is configured its lightweight cache counters remain available independently.
 
+The Performance Advisor orders findings by severity, then measured duration (descending), with a stable ID tie-breaker. Untimed findings follow timed findings of the same severity. Timings may overlap and are not an estimate of recoverable request time. The configured `max_findings` limit applies after ranking.
+
+Hydration rules use aggregate counters even when operation history is limited. `modernorm.profiler.advisor.hydration_ms` defaults to 50 ms of active hydration time; `hydrated_entities_threshold` defaults to 1000 newly created entity instances. Counts do not measure peak memory or distinct database entities. Older cores without hydration metrics skip these rules. Omitted SQL entries are disclosed in query evidence and in the Advisor overview, including when no SQL finding reaches a threshold. Query ranking covers only retained entries, not the slowest executions of the entire request.
+
 ## Workers and exporters
 
 Statistics, L2 counters, SQL history and event history are registered with `kernel.reset`. The EntityManager factory clears and resets its lazy proxy and closes the connection, discarding unfinished transactions. Injected EntityManager references remain valid after a closed manager is reset. Standard Symfony/Messenger service resets must remain enabled. Custom worker loops must reset services between jobs.
