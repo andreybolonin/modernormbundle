@@ -1,6 +1,6 @@
 # Pinned core compatibility checks
 
-These checks run outside the default suite so the bundle can retain its published minimum core constraint while separately verifying unreleased core behavior. CI checks out core **618407b8128dd83b0aa706fa83831837cca90bef** and runs the complete bundle suite plus the focused Profiler and SDK tests on PHP 8.4 and 8.5. Update the pin and compatibility evidence together when adopting a newer revision.
+These checks run outside the default suite so the bundle can retain its published minimum core constraint while separately verifying unreleased core behavior. CI checks out core **710dd43c4ad1e29ef69e5edb60f99c96d6dd45c2** and runs the complete bundle suite plus the focused Profiler and SDK tests on PHP 8.4 and 8.5 against PostgreSQL 17, 18 and 19rc1 (six required compatibility jobs). Update the pin and compatibility evidence together when adopting a newer revision.
 
 With the root and observability example dependencies installed:
 
@@ -27,3 +27,7 @@ Core Redis verification used isolated Redis 8.10.3 processes and PostgreSQL: **5
 ## Executed DML compatibility
 
 Core `618407b` adds request-wide INSERT/UPDATE/DELETE execution aggregates and optional DML details on SQL events. Compatibility checks now verify saved DML tables, rollback/zero-row semantics, absence of planned fallbacks, old serialized snapshots/collectors and distinct DML OTLP counters/rows. Default bundle tests still support the published minimum core, where DML is explicitly unavailable. The new core revision must be available remotely before running its pinned CI job.
+
+## Stabilization candidate — 2026-11-08
+
+The pin now targets core `710dd43`, including the UnitOfWork extractions and SchemaTool round-trip fixes. All 19 core CI jobs (quality plus 18 PHP/dependency/PostgreSQL combinations) passed in [core run 42454738734](https://github.com/andreybolonin/modernorm/actions/runs/42454738734). Bundle compatibility for the exact pin is verified by the workflow above; local PostgreSQL matrix runs are not required.
