@@ -20,7 +20,7 @@ Functional tests boot a standalone Symfony kernel and verify persisted profiles,
 
 ## Core compatibility
 
-The normal dependency matrix tests the published core constraint. A separate [pinned-core compatibility matrix](../tools/core-compatibility/README.md) runs the full bundle suite and real bulk SoftDelete/restore checks for saved Profiler views and OpenTelemetry metrics on PHP 8.4/8.5, without requiring an unreleased core for ordinary installations.
+The normal dependency matrix tests the published core constraint. A separate [pinned-core compatibility matrix](../tools/core-compatibility/README.md) runs the full bundle suite, reversible FTS migration commands and real bulk SoftDelete/restore checks for saved Profiler views and OpenTelemetry metrics on PHP 8.4/8.5, without requiring an unreleased core for ordinary installations.
 
 ## Static analysis and code style
 

@@ -35,7 +35,18 @@ final class SchemaScope
 
     public function schema(): Schema
     {
-        $schema = (new SchemaTool($this->manager))->getSchemaFromMetadata($this->manager->getMetadataFactory()->getAllMetadata());
+        $classes = [];
+        foreach ($this->manager->getMetadataFactory()->getAllMetadata() as $metadata) {
+            $metadata->assertSupportedMapping();
+            $copy = clone $metadata;
+            // This ownership/purge view needs tables and sequences, not technical FTS assets.
+            // Reflection keeps the published minimum core compatible with the newer metadata shape.
+            if (array_key_exists('fullTextIndexes', get_object_vars($copy))) {
+                (new \ReflectionProperty($copy, 'fullTextIndexes'))->setValue($copy, []);
+            }
+            $classes[] = $copy;
+        }
+        $schema = (new SchemaTool($this->manager))->getSchemaFromMetadata($classes);
         foreach ([...$schema->getTables(), ...$schema->getSequences()] as $asset) {
             $name = $asset->getName();
             if (!$this->owns($name)) {
@@ -44,6 +55,43 @@ final class SchemaScope
         }
 
         return $schema;
+    }
+
+    public function hasFullText(): bool
+    {
+        foreach ($this->manager->getMetadataFactory()->getAllMetadata() as $metadata) {
+            if ([] !== (get_object_vars($metadata)['fullTextIndexes'] ?? [])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function supportsMigrationPlan(): bool
+    {
+        return (new \ReflectionClass(SchemaTool::class))->hasMethod('getSchemaMigrationSql');
+    }
+
+    /** @return array{up: list<string>, down: list<string>} */
+    public function migrationPlan(\Doctrine\DBAL\Connection $connection, bool $fromEmptySchema): array
+    {
+        $this->schema(); // Validate ownership before the core can whitelist mapped assets.
+        $manager = new class ($this->manager, $connection) extends \ModernORM\Decorator\EntityManagerDecorator {
+            public function __construct(EntityManagerInterface $wrapped, private readonly \Doctrine\DBAL\Connection $connection)
+            {
+                parent::__construct($wrapped);
+            }
+
+            public function getConnection(): \Doctrine\DBAL\Connection
+            {
+                return $this->connection;
+            }
+        };
+        $tool = new SchemaTool($manager);
+        $generate = new \ReflectionMethod($tool, 'getSchemaMigrationSql');
+
+        return $generate->invoke($tool, $this->manager->getMetadataFactory()->getAllMetadata(), $fromEmptySchema);
     }
 
     public function cachedClasses(): array

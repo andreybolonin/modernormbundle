@@ -15,6 +15,9 @@ final class SchemaProvider implements \Doctrine\Migrations\Provider\SchemaProvid
 
     public function createSchema(): Schema
     {
+        if ($this->scope->hasFullText()) {
+            throw new \LogicException('DBAL Schema cannot represent FTS assets; generate complete migrations through modernorm:migrations:diff.');
+        }
         $schema = $this->scope->schema();
         // Asset filters do not filter namespaces. Preserve all existing namespaces on both sides,
         // so unrelated empty schemas cannot leak into generated up/down SQL.

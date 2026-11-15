@@ -21,6 +21,7 @@ final class DependencyFactoryFactory
     {
         // A separate connection keeps diff's schema filter off normal ORM/schema commands.
         $dbal = new DbalConfiguration();
+        $dbal->setTypeProvider($source->getConfiguration()->getTypeProvider());
         $dbal->setSchemaAssetsFilter(static fn (string $name): bool => $scope->isMetadataTable($name) || $scope->owns($name));
         $connection = DriverManager::getConnection($source->getParams(), $dbal);
         if (!$connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
@@ -41,17 +42,10 @@ final class DependencyFactoryFactory
         // History must remain visible to storage and commit on the same connection as migration SQL.
         // Diff introspection gets its own filter, excluding history without hiding it from tablesExist().
         $diffConfiguration = new DbalConfiguration();
+        $diffConfiguration->setTypeProvider($source->getConfiguration()->getTypeProvider());
         $diffConfiguration->setSchemaAssetsFilter(static fn (string $name): bool => $scope->owns($name));
         $diffConnection = DriverManager::getConnection($source->getParams(), $diffConfiguration);
-        $factory->setDefinition(\Doctrine\Migrations\Generator\DiffGenerator::class, static fn () => new \Doctrine\Migrations\Generator\DiffGenerator(
-            $diffConfiguration,
-            $diffConnection->createSchemaManager(),
-            $factory->getSchemaProvider(),
-            $diffConnection->getDatabasePlatform(),
-            $factory->getMigrationGenerator(),
-            $factory->getMigrationSqlGenerator(),
-            new \Doctrine\Migrations\Provider\EmptySchemaProvider($diffConnection->createSchemaManager()),
-        ));
+        $factory->setDefinition(\Doctrine\Migrations\Generator\DiffGenerator::class, static fn () => new DiffGenerator($factory, $diffConfiguration, $diffConnection, $scope));
 
         return $factory;
     }

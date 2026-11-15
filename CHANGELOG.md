@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pin core compatibility to `7228821`; integrate reversible FTS migration plans with ordinary diff changes and require DBAL 4.6. Preserve source type providers on isolated connections and FTS metadata during ownership checks and fixture purge.
+
 - Show request-wide executed DML instead of planned queues on the Profiler summary; add DML statement/row/duration OTLP instruments and Grafana panels, preserving unavailable states for older cores/profiles.
 
 - Add PHPStan level 5 and PHP-CS-Fixer PSR-12 Composer/CI checks for source, tests, tools and examples; fix type contracts and format existing PHP without a baseline.

@@ -6,6 +6,7 @@
     "require": {
         "php": "^8.4",
         "andreybolonin/modernorm": "^0.1.0-beta.3",
+        "doctrine/dbal": "^4.6",
         "symfony/framework-bundle": "^7.4 || ^8.0",
         "symfony/cache": "^7.4 || ^8.0",
         "symfony/service-contracts": "^3.5",
