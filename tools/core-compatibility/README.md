@@ -1,6 +1,6 @@
 # Pinned core compatibility checks
 
-These checks run outside the default suite so the bundle can retain its published minimum core constraint while separately verifying unreleased core behavior. CI checks out core **7228821c10e9ee2c84ce3dc925c6be139b70ea4c** and runs the complete bundle suite plus the focused Profiler and SDK tests on PHP 8.4 and 8.5 against PostgreSQL 17, 18 and 19rc1 (six required compatibility jobs). Update the pin and compatibility evidence together when adopting a newer revision.
+These checks run outside the default suite so the bundle can retain its published minimum core constraint while separately verifying unreleased core behavior. CI checks out core **ad789bc710eff617fcb86e6bc99b84f22572418d** and runs the complete bundle suite plus the focused Profiler and SDK tests on PHP 8.4 and 8.5 against PostgreSQL 17, 18 and 19rc1 (six required compatibility jobs). Update the pin and compatibility evidence together when adopting a newer revision.
 
 With the root and observability example dependencies installed:
 
@@ -34,6 +34,10 @@ The pin now targets core `710dd43`, including the UnitOfWork extractions and Sch
 
 ## FTS migration compatibility — 2026-11-15
 
-The active pin is `7228821`, including DBAL 4.6, FTS helpers, JSONB queries, cursor pagination and reversible `SchemaTool::getSchemaMigrationSql()` plans. Bundle diff consumes this complete SQL plan; the published minimum core retains its existing ordinary schema path. Bundle connections require DBAL 4.6 and preserve the source type provider.
+This FTS integration originally pinned `7228821`, including DBAL 4.6, FTS helpers, JSONB queries, cursor pagination and reversible `SchemaTool::getSchemaMigrationSql()` plans. Bundle diff consumes this complete SQL plan; the published minimum core retains its existing ordinary schema path. Bundle connections require DBAL 4.6 and preserve the source type provider.
 
 Real migration commands cover creation of generated vectors and GIN indexes, changed weights/configuration, down migrations, empty repeat diffs, preserved metadata and fixture purging. Local PostgreSQL 18 verification on PHP 8.4 and 8.5: full bundle suite **64 tests / 403 assertions**, compatibility suite **5 tests / 49 assertions**, without skips. The default suite also passes against the installed published core on PHP 8.5. PHPStan passes for both analysis configurations. PostgreSQL 17/18/19rc1 and dependency matrices remain CI checks; the new core commit must be pushed before its pinned checkout can run remotely.
+
+## Association Query API compatibility — 2026-11-15
+
+The active pin is `ad789bc`, adding immutable association queries and the EntityManager/decorator entry point. The bundle needs no production changes for this API. Its complete default suite passes against this revision on PHP 8.5: **64 tests / 403 assertions**, without skips. Core verification on PHP 8.4 and 8.5: **953 tests / 6929 assertions**, with 21 Redis tests skipped because Redis was not started. PHPStan and PSR-12 pass in core. The compatibility CI matrix verifies the new exact revision on both PHP versions and its configured PostgreSQL versions.
