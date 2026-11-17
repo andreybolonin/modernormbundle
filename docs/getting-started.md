@@ -4,7 +4,7 @@
 
 ## Requirements
 
-- PHP 8.4+, PostgreSQL and ModernORM `^0.1.0-beta.3`.
+- PHP 8.4+, PostgreSQL and ModernORM `^0.1.0-beta.5`.
 - Symfony 7.4 or 8.x.
 - TwigBundle and WebProfilerBundle for the optional debug interface.
 
@@ -13,7 +13,7 @@
 The beta requires explicit stability flags for both packages in the application's root manifest:
 
 ```sh
-composer require 'andreybolonin/modernorm:^0.1.0-beta.3' 'andreybolonin/modernorm-bundle:^0.1.0-beta.3'
+composer require 'andreybolonin/modernorm:^0.1.0-beta.5' 'andreybolonin/modernorm-bundle:^0.1.0-beta.5'
 ```
 
 Register the bundle in `config/bundles.php`:

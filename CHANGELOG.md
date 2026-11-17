@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.0-beta.5 — 2026-11-17
+
+- Require core beta.5 and advance the compatibility pin to `15db53058e10fa1fcd3ad7464c7531cb2a131600`, including scalar dirty checking, hydration/UoW extraction and flush/COMMIT contract regressions.
+
 - Advance the compatibility core pin to `ad789bc`, covering the new EntityManager Association Query API without bundle production changes.
 
 - Pin core compatibility to `7228821`; integrate reversible FTS migration plans with ordinary diff changes and require DBAL 4.6. Preserve source type providers on isolated connections and FTS metadata during ownership checks and fixture purge.

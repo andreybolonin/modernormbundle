@@ -1,6 +1,6 @@
 # Pinned core compatibility checks
 
-These checks run outside the default suite so the bundle can retain its published minimum core constraint while separately verifying unreleased core behavior. CI checks out core **ad789bc710eff617fcb86e6bc99b84f22572418d** and runs the complete bundle suite plus the focused Profiler and SDK tests on PHP 8.4 and 8.5 against PostgreSQL 17, 18 and 19rc1 (six required compatibility jobs). Update the pin and compatibility evidence together when adopting a newer revision.
+These checks run outside the default suite so the bundle can retain its published minimum core constraint while separately verifying unreleased core behavior. CI checks out core **15db53058e10fa1fcd3ad7464c7531cb2a131600** (beta.5 candidate) and runs the complete bundle suite plus the focused Profiler and SDK tests on PHP 8.4 and 8.5 against PostgreSQL 17, 18 and 19rc1 (six required compatibility jobs). Update the pin and compatibility evidence together when adopting a newer revision.
 
 With the root and observability example dependencies installed:
 
@@ -41,3 +41,10 @@ Real migration commands cover creation of generated vectors and GIN indexes, cha
 ## Association Query API compatibility — 2026-11-15
 
 The active pin is `ad789bc`, adding immutable association queries and the EntityManager/decorator entry point. The bundle needs no production changes for this API. Its complete default suite passes against this revision on PHP 8.5: **64 tests / 403 assertions**, without skips. Core verification on PHP 8.4 and 8.5: **953 tests / 6929 assertions**, with 21 Redis tests skipped because Redis was not started. PHPStan and PSR-12 pass in core. The compatibility CI matrix verifies the new exact revision on both PHP versions and its configured PostgreSQL versions.
+
+
+## Beta.5 candidate
+
+Core beta.5 is pinned to `15db53058e10fa1fcd3ad7464c7531cb2a131600`. The bundle now requires `^0.1.0-beta.5`; historical results above describe earlier pins, not release evidence for this candidate. The complete compatibility CI must pass for the exact release commit before tagging.
+
+Local candidate verification on PostgreSQL 18.7: PHP 8.4/8.5 each pass the full bundle suite (64 tests / 403 assertions, no skips); focused FTS/Profiler compatibility passes 5 tests / 49 assertions on PHP 8.5. Bundle and pinned-core PHPStan pass. These local results do not replace the exact-candidate CI gate.

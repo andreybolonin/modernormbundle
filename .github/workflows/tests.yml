@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      COMPOSER_ROOT_VERSION: 0.1.0-beta.3
+      COMPOSER_ROOT_VERSION: 0.1.0-beta.5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,7 +45,7 @@ jobs:
         php: ['8.4', '8.5']
         symfony: ['locked', '7.4', '8.1']
     env:
-      COMPOSER_ROOT_VERSION: 0.1.0-beta.3
+      COMPOSER_ROOT_VERSION: 0.1.0-beta.5
       MODERNORM_TEST_URL: postgresql://postgres:postgres@127.0.0.1:5432/modernorm_test
     services:
       postgres:
@@ -111,7 +111,7 @@ jobs:
         run: php tests/Smoke/runtime.php
 
   core-compatibility:
-    name: Core ad789bc / PHP ${{ matrix.php }} / PostgreSQL ${{ matrix.postgresql }}
+    name: Core beta.5 / PHP ${{ matrix.php }} / PostgreSQL ${{ matrix.postgresql }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -120,7 +120,7 @@ jobs:
         php: ['8.4', '8.5']
         postgresql: ['17', '18', '19rc1']
     env:
-      COMPOSER_ROOT_VERSION: 0.1.0-beta.3
+      COMPOSER_ROOT_VERSION: 0.1.0-beta.5
       MODERNORM_TEST_URL: postgresql://postgres:postgres@127.0.0.1:5432/modernorm_test
       MODERNORM_CORE_PATH: ${{ github.workspace }}/modernorm-core
     services:
@@ -144,7 +144,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: andreybolonin/modernorm
-          ref: ad789bc710eff617fcb86e6bc99b84f22572418d
+          ref: 15db53058e10fa1fcd3ad7464c7531cb2a131600
           path: modernorm-core
           persist-credentials: false
       - uses: shivammathur/setup-php@v2
