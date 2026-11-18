@@ -9,6 +9,8 @@ use ModernORM\Bundle\DataTransfer\DependencyOrder;
 use ModernORM\Bundle\DataTransfer\TransferCommand;
 use ModernORM\Bundle\DataTransfer\TypeCompatibility;
 use ModernORM\Bundle\DataTransfer\EnvironmentConnection;
+use ModernORM\Bundle\DataTransfer\RehearsalGuard;
+use Doctrine\DBAL\Connection;
 use ModernORM\Configuration;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -42,7 +44,7 @@ final class DataTransferTest extends TestCase
     {
         $tester = new CommandTester(new TransferCommand(new Configuration()));
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('data loading is not implemented');
+        $this->expectExceptionMessage('Pass --dry-run or --rehearsal');
         $tester->execute([]);
     }
 
@@ -76,5 +78,22 @@ final class DataTransferTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('nonnegative max error examples');
         $tester->execute(['--dry-run' => true, '--validate-data' => true, '--source-url-env' => 'SOURCE', '--target-url-env' => 'TARGET', '--max-error-examples' => '-1']);
+    }
+
+    public function testRehearsalAndDryRunAreMutuallyExclusive(): void
+    {
+        $tester = new CommandTester(new TransferCommand(new Configuration()));
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('exclusively');
+        $tester->execute(['--dry-run' => true, '--rehearsal' => true]);
+    }
+
+    public function testRehearsalRequiresKnownApplicationDatabaseBeforeOpeningTarget(): void
+    {
+        $target = $this->createMock(Connection::class);
+        $target->expects(self::never())->method('fetchOne');
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('explicitly configured application database');
+        (new RehearsalGuard())->checkDatabase($target, null);
     }
 }

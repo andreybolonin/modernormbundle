@@ -1,8 +1,9 @@
 # Plan a MySQL to PostgreSQL data transfer
 
-`modernorm:data:transfer` currently implements **planning only**. `--dry-run` is
-required. Running without it fails before opening either connection. No loader,
-DDL generation, row copying, sequence resets or resume mechanism is implemented.
+`modernorm:data:transfer` supports read-only planning (`--dry-run`) and real loading
+into a separate rehearsal database (`--rehearsal`). Choose exactly one mode.
+Loading into the configured application database, automatic DDL and resume are
+not supported.
 
 ```bash
 php bin/console modernorm:data:transfer \
@@ -16,7 +17,8 @@ Both URL options name environment variables, not literal URLs. Symfony Dotenv
 values and process environment variables are supported. The source must use
 MySQL/PDO (`pdo_mysql` extension), and target PostgreSQL/PDO (`pdo_pgsql`). MySQL
 8.4 is integration-tested; MariaDB and other transfer directions are unsupported.
-Credentials are not printed in the report. No application connection is used.
+Credentials are not printed in the report. The application connection is not
+opened; its configured database name is used to guard rehearsal isolation.
 
 First generate and review attribute entities using `modernorm:mapping:import`.
 Configure their mapping paths in the bundle, adapt MySQL-specific types/options,
@@ -49,7 +51,7 @@ table's effective size is capped against PostgreSQL's 65535 bind-parameter limit
 Without `--validate-data`, no source batches are read. No rows are ever written
 by dry run.
 
-Both connections are placed in read-only REPEATABLE READ transactions and rolled back/closed
+Dry-run connections are placed in read-only REPEATABLE READ transactions and rolled back/closed
 after planning. Metadata uses an in-memory cache. Planning reads catalog metadata
 and checks target emptiness with `SELECT 1 ... LIMIT 1`; it does not scan or count
 source rows unless `--validate-data` is supplied. Changing schemas/data after
@@ -96,6 +98,73 @@ describes coverage, not whether values passed: inspect `error_count` and the exi
 code. The source and target session timezones are included for review; validation
 does not infer timezone conversion or business rules.
 
+## Rehearse a real load
+
+Create a disposable PostgreSQL database and apply the **same migrations,
+extensions, constraints and triggers** intended for the final target. Entity
+schema generation alone may omit CHECK constraints, functions or triggers. The
+command neither creates nor drops databases and never truncates target tables.
+
+```bash
+php bin/console modernorm:data:transfer \
+    --source-url-env=MYSQL_DATABASE_URL \
+    --target-url-env=REHEARSAL_POSTGRES_DATABASE_URL \
+    --batch-size=1000 --rehearsal --format=json
+```
+
+The target database name must differ from the explicitly configured application
+database name, even on a different host. `postgres` and template databases are
+rejected. A different schema inside the application database is insufficient.
+Keep the application's connection configured normally; only the explicit target
+URL points to rehearsal. The bundle supplies the application connection parameters
+for this check without connecting to it.
+
+**Rehearsal writes and commits real data.** Use an isolated environment: triggers
+are enabled and may call external services. Configure those external actions for
+test services/isolation. Turning off triggers would invalidate the rehearsal;
+disabled or replica-only triggers, a non-origin replication role and RLS-enabled
+planned tables are rejected, including partition/inheritance descendants.
+
+The source remains a read-only InnoDB REPEATABLE READ snapshot. The target uses a
+single READ COMMITTED write transaction. Planned target tables are locked in
+deterministic order against concurrent writers, then rechecked for emptiness.
+Full value validation is mandatory and uses the same snapshot, batch reader,
+target type descriptions and scalar input conversion as the loader. Structural
+or value errors prevent any inserts. `--validate-data` is implied in this mode.
+
+The shared loader inserts bounded batches in FK order using typed PostgreSQL
+casts and bytea-safe hex decoding. Explicit IDs use `OVERRIDING SYSTEM VALUE`.
+INSERT RETURNING verifies that triggers did not suppress rows or change PKs.
+After loading it forces deferred constraints with `SET CONSTRAINTS ALL IMMEDIATE`,
+compares row counts and checks every source PK still exists in the target. Trigger
+transformations of other columns are allowed; this is not byte-for-byte content
+verification. CHECK, UNIQUE, FK and trigger behavior is exercised by PostgreSQL.
+Existing planner restrictions, including cycles and ManyToMany, still apply.
+
+Owned PK sequences are reset after verification, including empty-table starts
+and descending increments. Exhausted or incompatible sequence ranges fail the
+rehearsal. Custom/unowned sequences need manual synchronization. Sequence capacity
+is checked before resets; sequence updates are not transactional.
+
+Success commits and leaves the rehearsal database for inspection. The report
+includes `rehearsal.status: committed`, `target_data_committed: true`, per-table
+counts, verified keys, sequence resets and `constraints_checked: true`. Retrying
+against those nonempty tables fails; clean/recreate only the disposable database
+using your normal environment workflow.
+
+The first failing batch stops loading; no rows are silently skipped. The report
+identifies stage, table, batch number, exception category and SQLSTATE without
+including PostgreSQL's potentially sensitive row details. Deferred failures may
+be reported at the constraints stage without an individual row. There is no
+savepoint-based row isolation or resume yet. `rows_loaded` on failure counts work
+inside the failed transaction, not committed target rows.
+
+Failed table writes roll back on connection cleanup. **Sequence changes and
+external trigger actions can survive rollback.** An uncertain COMMIT failure
+reports `target_data_committed: null`; inspect the database before retrying.
+The rehearsal covers the chosen snapshot and database setup, not future changes
+or external production behavior. Stop writes for an eventual real migration.
+
 ## Reports and exit codes
 
 Text reports list tables, column conversions, effective batch sizes, sequence
@@ -114,6 +183,11 @@ blockers or invalid values. Invalid options, connection failures,
 unsupported introspection types and invalid ORM metadata can fail earlier with
 a Console error. JSON reports include `data_scanned` and prerequisites
 for any future loader. Success is **not** a promise that all rows can be copied.
+
+In rehearsal mode, exit code 0 means the load committed after verification.
+Structural, value, insert, deferred-constraint, verification or sequence failures
+return a failing report and exit code 1. Isolation guard failures reject the
+command before loading.
 
 ## Checks still required for actual loading
 

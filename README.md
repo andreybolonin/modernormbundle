@@ -6,7 +6,8 @@ Generate entities from an existing PostgreSQL or MySQL database with
 Plan a MySQL → PostgreSQL data migration with
 [`modernorm:data:transfer --dry-run`](docs/data-transfer.md). The first version
 checks structure and dependencies; add `--validate-data` to scan all source rows
-for value compatibility. Data loading is not implemented yet.
+for value compatibility. Use `--rehearsal` to load and verify a separate disposable
+PostgreSQL database with real constraints and triggers.
 
 **Find expensive ORM work in Symfony. Follow it from the Profiler to Grafana.**
 

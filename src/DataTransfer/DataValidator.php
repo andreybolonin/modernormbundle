@@ -18,41 +18,13 @@ final class DataValidator
             throw new \RuntimeException('Data validation currently requires a UTF8 PostgreSQL database.');
         }
         $validator = new ValueValidator();
-        $database = $source->getDatabase();
-        if ($database === null || $database === '') {
-            throw new \InvalidArgumentException('A MySQL source database is required.');
-        }
-        $sourcePlatform = $source->getDatabasePlatform();
         foreach ($plan['tables'] as $name => $table) {
-            if (count($table['primary_key']) !== 1) {
-                throw new \RuntimeException('Data validation requires a single-column primary key.');
-            }
-            $engine = $source->fetchOne('SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?', [$database, $name]);
-            if ($engine !== 'InnoDB') {
-                throw new \RuntimeException($name.': a consistent data scan requires an InnoDB source table.');
-            }
-            $from = $source->createSchemaManager()->introspectTableByQuotedName($name);
-            $targetColumns = $target->createSchemaManager()->introspectTable($table['target'])->getColumns();
-            $definitions = $target->fetchAllAssociative('SELECT a.attname AS name, pg_catalog.format_type(a.atttypid, a.atttypmod) AS sql_type, c.datetime_precision FROM pg_catalog.pg_attribute a LEFT JOIN information_schema.columns c ON c.table_schema = (SELECT n.nspname FROM pg_catalog.pg_namespace n JOIN pg_catalog.pg_class r ON r.relnamespace = n.oid WHERE r.oid = a.attrelid) AND c.table_name = (SELECT r.relname FROM pg_catalog.pg_class r WHERE r.oid = a.attrelid) AND c.column_name = a.attname WHERE a.attrelid = CAST(? AS regclass) AND a.attnum > 0 AND NOT a.attisdropped', [$table['target']]);
-            $specifications = [];
-            foreach ($definitions as $definition) {
-                $specifications[$definition['name']] = $definition;
-            }
-            // Index by raw names: DBAL's legacy getColumns() keys can contain quotes.
-            $columns = [];
-            foreach ($targetColumns as $column) {
-                $columns[$column->getObjectName()->getIdentifier()->getValue()] = $column;
-            }
+            $description = (new TargetColumns())->describe($target, $table['target']);
+            $columns = $description['columns'];
+            $specifications = $description['definitions'];
             $key = $table['primary_key'][0];
-            $quotedKey = $sourcePlatform->quoteSingleIdentifier($key);
-            $keyColumn = $from->getColumn($key);
-            $parameter = in_array($keyColumn->getTypeName(), ['smallint', 'integer', 'bigint'], true) ? 'CAST(? AS '.($keyColumn->getUnsigned() ? 'UNSIGNED' : 'SIGNED').')' : '?';
-            $projection = implode(', ', array_map(static fn (array $column): string => $sourcePlatform->quoteSingleIdentifier($column['name']), $table['columns']));
-            $sourceTable = $sourcePlatform->quoteSingleIdentifier($database).'.'.$sourcePlatform->quoteSingleIdentifier($name);
-            $last = null;
             $report['tables'][$name] = ['rows_scanned' => 0, 'invalid_rows' => 0, 'error_count' => 0];
-            do {
-                $rows = $source->fetchAllAssociative('SELECT '.$projection.' FROM '.$sourceTable.($last === null ? '' : ' WHERE '.$quotedKey.' > '.$parameter).' ORDER BY '.$quotedKey.' LIMIT '.$table['batch_size'], $last === null ? [] : [$last]);
+            foreach ((new BatchReader())->batches($source, $name, $table) as $rows) {
                 $pending = $failedRows = [];
                 foreach ($rows as $rowIndex => $row) {
                     ++$report['rows_scanned'];
@@ -78,10 +50,7 @@ final class DataValidator
                 $this->checkInputs($target, $pending, $report, $failedRows, $name, $maxExamples);
                 $report['invalid_rows'] += count($failedRows);
                 $report['tables'][$name]['invalid_rows'] += count($failedRows);
-                if ($rows !== []) {
-                    $last = $rows[array_key_last($rows)][$key];
-                }
-            } while ($rows !== []);
+            }
         }
         $report['examples_truncated'] = $report['error_count'] > count($report['error_examples']);
 
