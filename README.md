@@ -3,6 +3,11 @@
 Generate entities from an existing PostgreSQL or MySQL database with
 [`modernorm:mapping:import`](docs/reverse-engineering.md), including a dry-run preview.
 
+Plan a MySQL → PostgreSQL data migration with
+[`modernorm:data:transfer --dry-run`](docs/data-transfer.md). The first version
+checks structure and dependencies; add `--validate-data` to scan all source rows
+for value compatibility. Data loading is not implemented yet.
+
 **Find expensive ORM work in Symfony. Follow it from the Profiler to Grafana.**
 
 ModernORMBundle brings [ModernORM](https://github.com/andreybolonin/modernorm), the PostgreSQL-first ORM for PHP 8.4+, into Symfony with a Performance Advisor, request-level diagnostics and OpenTelemetry metrics.

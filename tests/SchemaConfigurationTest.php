@@ -26,6 +26,8 @@ final class SchemaConfigurationTest extends TestCase
         self::assertFalse($container->hasDefinition('modernorm.migrations.dependency_factory'));
         self::assertFalse($container->hasDefinition('modernorm.fixtures.command'));
         self::assertTrue($container->hasDefinition('modernorm.command.mapping.import'));
+        self::assertTrue($container->hasDefinition('modernorm.command.data.transfer'));
+        self::assertSame('modernorm.configuration', (string) $container->getDefinition('modernorm.command.data.transfer')->getArgument(0));
         self::assertSame('modernorm.connection', (string) $container->getDefinition('modernorm.command.mapping.import')->getArgument(0));
     }
     public function testEnabledIntegrationsRegisterNamespacedCommandsAndOnlyModernOrmFixtures(): void

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add `modernorm:data:transfer --dry-run --validate-data`: scan all InnoDB source rows using bounded keyset batches, validate PostgreSQL type input and lossy conversions without inserts, and report exact counts with bounded PK/column error examples. UNIQUE/FK/CHECK constraints and triggers remain outside validation.
+
+- Add read-only `modernorm:data:transfer --dry-run` planning for MySQL → PostgreSQL using mapped entities, with source coverage, empty-target/type/PK checks, FK ordering, sequence plans, JSON reports and explicit value-validation limits. Data loading is not implemented.
+
 - Support MySQL schema sources in `modernorm:mapping:import` via `--source-url-env`, with AUTO_INCREMENT, unsigned types, ENUM/SET, platform-aware indexes, explicit manual-review warnings and MySQL 8.4 CI coverage. Application persistence remains PostgreSQL-only.
 
 - Add `modernorm:mapping:import` to generate new attribute entities from existing PostgreSQL tables, with schema/table selection, dry-run, simple owning associations, identity/serial IDs and explicit unsupported-mapping reports.
