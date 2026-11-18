@@ -12,6 +12,8 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
+use Symfony\Component\Console\Output\StreamOutput;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 final class TransferCommand extends Command
@@ -23,12 +25,13 @@ final class TransferCommand extends Command
 
     protected function configure(): void
     {
-        $this->setDescription('Plan a MySQL transfer or rehearse it in a separate PostgreSQL database.')
+        $this->setDescription('Plan, rehearse or execute a MySQL to PostgreSQL data transfer.')
             ->addOption('source-url-env', null, InputOption::VALUE_REQUIRED, 'Environment variable holding the MySQL source URL.')
             ->addOption('target-url-env', null, InputOption::VALUE_REQUIRED, 'Environment variable holding the PostgreSQL target URL.')
             ->addOption('batch-size', null, InputOption::VALUE_REQUIRED, 'Planned maximum rows per batch.', '1000')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Inspect without writing any data.')
             ->addOption('rehearsal', null, InputOption::VALUE_NONE, 'Validate and load a separate empty rehearsal database, committing results for inspection.')
+            ->addOption('execute', null, InputOption::VALUE_NONE, 'Validate and load the explicit final PostgreSQL target, committing only after verification.')
             ->addOption('validate-data', null, InputOption::VALUE_NONE, 'Scan every source row in bounded batches and validate target values without writing.')
             ->addOption('max-error-examples', null, InputOption::VALUE_REQUIRED, 'Maximum retained validation examples; scanning and error counting always continue.', '100')
             ->addOption('rules', null, InputOption::VALUE_REQUIRED, 'JSON file containing explicit, versioned column transformation rules.')
@@ -42,8 +45,11 @@ final class TransferCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $rehearsal = $input->getOption('rehearsal');
-        if ($input->getOption('dry-run') === $rehearsal) {
-            throw new \InvalidArgumentException('Pass --dry-run or --rehearsal, exclusively. Application database loading is not supported.');
+        $production = $input->getOption('execute');
+        $write = $rehearsal || $production;
+        $loadKey = $production ? 'transfer' : 'rehearsal';
+        if ((int) $input->getOption('dry-run') + (int) $rehearsal + (int) $production !== 1) {
+            throw new \InvalidArgumentException('Pass --dry-run or --rehearsal or --execute, exclusively.');
         }
         $sourceEnv = $input->getOption('source-url-env');
         $targetEnv = $input->getOption('target-url-env');
@@ -52,8 +58,8 @@ final class TransferCommand extends Command
         $maxExamples = filter_var($input->getOption('max-error-examples'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
         $maxChanges = filter_var($input->getOption('max-change-examples'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
         $suggest = $input->getOption('suggest-rules');
-        if ($suggest && ($rehearsal || !$input->isInteractive() || $format !== 'text' || $input->getOption('change-log') !== null)) {
-            throw new \InvalidArgumentException('--suggest-rules requires interactive --dry-run with text output, without --rehearsal or --change-log.');
+        if ($suggest && ($write || !$input->isInteractive() || $format !== 'text' || $input->getOption('change-log') !== null)) {
+            throw new \InvalidArgumentException('--suggest-rules requires interactive --dry-run with text output, without --rehearsal, --execute or --change-log.');
         }
         if (!$suggest && $input->getOption('rules-output') !== null) {
             throw new \InvalidArgumentException('--rules-output requires --suggest-rules.');
@@ -68,8 +74,11 @@ final class TransferCommand extends Command
         $rulesPath = $input->getOption('rules');
         $rules = $rulesPath === null ? TransformationRules::empty() : TransformationRules::fromFile($rulesPath);
         $logPath = $input->getOption('change-log');
-        if ($logPath !== null && !$rehearsal && !$input->getOption('validate-data')) {
-            throw new \InvalidArgumentException('--change-log requires --validate-data or --rehearsal.');
+        if ($logPath !== null && !$write && !$input->getOption('validate-data')) {
+            throw new \InvalidArgumentException('--change-log requires --validate-data, --rehearsal or --execute.');
+        }
+        if ($production) {
+            $this->warnBeforeExecution($output, $format);
         }
         $source = EnvironmentConnection::open($sourceEnv, 'pdo_mysql');
         $target = null;
@@ -80,12 +89,14 @@ final class TransferCommand extends Command
             $target = EnvironmentConnection::open($targetEnv, 'pdo_pgsql');
             if ($rehearsal) {
                 (new RehearsalGuard())->checkDatabase($target, $this->applicationConnection);
+            } elseif ($production) {
+                (new TargetGuard())->checkDatabase($target);
             }
             // The source is always a read-only consistent snapshot.
             $source->executeStatement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
             $source->beginTransaction();
             $target->beginTransaction();
-            $target->executeStatement($rehearsal ? 'SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE' : 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
+            $target->executeStatement($write ? 'SET TRANSACTION ISOLATION LEVEL READ COMMITTED, READ WRITE' : 'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
             $configuration = clone $this->configuration;
             $configuration->setMetadataCache(new ArrayAdapter());
             $manager = new EntityManager($target, $configuration);
@@ -93,33 +104,34 @@ final class TransferCommand extends Command
             $plan = (new Planner())->plan($source, $target, $metadata, $size);
             $plan['rules'] = $rules->describe();
             $plan['errors'] = array_merge($plan['errors'], $rules->errorsForPlan($plan));
-            if ($rehearsal) {
-                $plan['mode'] = 'rehearsal';
-                $plan['rehearsal'] = ['status' => 'skipped_structural_errors', 'target_data_committed' => false];
+            if ($write) {
+                $plan['mode'] = $production ? 'execute' : 'rehearsal';
+                $plan['connections'] = ['source_database' => $source->getDatabase(), 'target_database' => $target->fetchOne('SELECT pg_catalog.current_database()')];
+                $plan[$loadKey] = ['status' => 'skipped_structural_errors', 'target_data_committed' => false];
                 if ($plan['errors'] === []) {
                     try {
-                        $plan['rehearsal'] = (new Loader())->load($source, $target, $plan, $maxExamples, $rules, $maxChanges, $log);
-                        if ($plan['rehearsal']['status'] === 'loaded') {
+                        $plan[$loadKey] = (new Loader())->load($source, $target, $plan, $maxExamples, $rules, $maxChanges, $log);
+                        if ($plan[$loadKey]['status'] === 'loaded') {
                             try {
                                 $target->commit();
-                                $plan['rehearsal']['status'] = 'committed';
-                                $plan['rehearsal']['stage'] = 'complete';
-                                $plan['rehearsal']['target_data_committed'] = true;
+                                $plan[$loadKey]['status'] = 'committed';
+                                $plan[$loadKey]['stage'] = 'complete';
+                                $plan[$loadKey]['target_data_committed'] = true;
                             } catch (\Doctrine\DBAL\Exception) {
-                                $plan['rehearsal']['status'] = 'commit_failed';
-                                $plan['rehearsal']['stage'] = 'commit';
-                                $plan['rehearsal']['target_data_committed'] = null;
-                                $plan['errors'][] = 'Rehearsal COMMIT failed; final database state may be uncertain. Inspect the rehearsal database.';
+                                $plan[$loadKey]['status'] = 'commit_failed';
+                                $plan[$loadKey]['stage'] = 'commit';
+                                $plan[$loadKey]['target_data_committed'] = null;
+                                $plan['errors'][] = 'Transfer COMMIT failed; final database state may be uncertain. Inspect the explicit target database.';
                             }
                         } else {
-                            $plan['errors'][] = 'Rehearsal stopped before loading because value validation failed.';
+                            $plan['errors'][] = 'Transfer stopped before loading because value validation failed.';
                         }
                     } catch (LoadFailure $failure) {
-                        $plan['rehearsal'] = $failure->report;
+                        $plan[$loadKey] = $failure->report;
                         $plan['errors'][] = $failure->getMessage();
                     }
-                    if ($plan['rehearsal']['validation'] !== null) {
-                        $plan['validation'] = $plan['rehearsal']['validation'];
+                    if ($plan[$loadKey]['validation'] !== null) {
+                        $plan['validation'] = $plan[$loadKey]['validation'];
                         $plan['data_scanned'] = true;
                     }
                 }
@@ -153,8 +165,8 @@ final class TransferCommand extends Command
                     }
                 }
             }
-            $outcome = $plan['errors'] === [] ? ($rehearsal ? 'committed' : 'validated') : 'failed';
-            if (isset($plan['rehearsal']) && array_key_exists('target_data_committed', $plan['rehearsal']) && $plan['rehearsal']['target_data_committed'] === null) {
+            $outcome = $plan['errors'] === [] ? ($write ? 'committed' : 'validated') : 'failed';
+            if (isset($plan[$loadKey]) && array_key_exists('target_data_committed', $plan[$loadKey]) && $plan[$loadKey]['target_data_committed'] === null) {
                 $outcome = 'commit_uncertain';
             }
         } finally {
@@ -174,13 +186,16 @@ final class TransferCommand extends Command
             $output->writeln(json_encode($plan, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), OutputInterface::OUTPUT_RAW);
         } else {
             $io = new SymfonyStyle($input, $output);
-            $io->title($rehearsal ? 'MySQL to PostgreSQL rehearsal' : 'MySQL to PostgreSQL transfer plan');
+            $io->title($write ? ($production ? 'MySQL to PostgreSQL final transfer' : 'MySQL to PostgreSQL rehearsal') : 'MySQL to PostgreSQL transfer plan');
+            if (isset($plan['connections'])) {
+                $io->text('Source database: '.$plan['connections']['source_database'].'; target database: '.$plan['connections']['target_database']);
+            }
             foreach ($plan['tables'] as $name => $table) {
                 $io->section($table['source'].' -> '.$table['target']);
                 $io->text('Entity: '.$table['entity'].'; planned batch size: '.$table['batch_size']);
                 $io->table(['Column', 'Planned conversion'], array_map(static fn (array $column): array => [$column['name'], $column['conversion']], $table['columns']));
                 if ($table['sequence_after_load'] !== null) {
-                    $io->text('Owned sequence: '.$table['sequence_after_load'].($rehearsal ? ' (see rehearsal result).' : ' (reset not executed).'));
+                    $io->text('Owned sequence: '.$table['sequence_after_load'].($write ? ' (see load result).' : ' (reset not executed).'));
                 }
             }
             $io->text('Load order: '.implode(' -> ', $plan['order']));
@@ -204,18 +219,18 @@ final class TransferCommand extends Command
                     $this->showChanges($io, $validation['transformations']);
                 }
             }
-            if ($rehearsal) {
-                $io->section('Rehearsal: '.$plan['rehearsal']['status']);
-                $io->text(json_encode($plan['rehearsal']['tables'] ?? [], JSON_THROW_ON_ERROR));
-                if (isset($plan['rehearsal']['transformations'])) {
-                    $this->showChanges($io, $plan['rehearsal']['transformations']);
+            if ($write) {
+                $io->section(($production ? 'Transfer: ' : 'Rehearsal: ').$plan[$loadKey]['status']);
+                $io->text(json_encode($plan[$loadKey]['tables'] ?? [], JSON_THROW_ON_ERROR));
+                if (isset($plan[$loadKey]['transformations'])) {
+                    $this->showChanges($io, $plan[$loadKey]['transformations']);
                 }
-                $io->note('Results are committed only on success, in the separate rehearsal database. On failure table writes are rolled back where possible; sequences and external trigger actions may persist. Inspect the database before retrying.');
+                $io->note('Results are committed only after verification to the explicitly selected target database. On failure table writes are rolled back where possible; sequences and external trigger actions may persist. Inspect the database before retrying.');
             } else {
                 $io->note($plan['data_scanned'] ? 'No data written. All planned source rows were scanned for value compatibility. UNIQUE, FK, CHECK constraints, triggers and timezone conversion policies were not validated.' : 'No data written. Row values were not scanned. Use --validate-data after resolving structural blockers.');
             }
             if ($plan['errors'] === []) {
-                $io->success($rehearsal ? 'Rehearsal committed. Constraints, row counts and primary keys checked; source unchanged.' : ($plan['data_scanned'] ? 'Value scan completed without detected errors. No data written.' : 'Structural plan prepared. Per-value checks remain required.'));
+                $io->success($write ? ($production ? 'Final transfer committed. Switch the application connection separately; source unchanged.' : 'Rehearsal committed. Constraints, row counts and primary keys checked; source unchanged.') : ($plan['data_scanned'] ? 'Value scan completed without detected errors. No data written.' : 'Structural plan prepared. Per-value checks remain required.'));
             }
         }
 
@@ -231,6 +246,26 @@ final class TransferCommand extends Command
         } finally {
             $connection->close();
         }
+    }
+
+    private function warnBeforeExecution(OutputInterface $output, string $format): void
+    {
+        if ($output instanceof ConsoleOutputInterface) {
+            $output = $output->getErrorOutput();
+        } elseif ($format === 'json') {
+            $stream = fopen('php://stderr', 'w');
+            if ($stream === false) {
+                throw new \RuntimeException('Cannot display the execution warning on stderr.');
+            }
+            $output = new StreamOutput($stream, $output->getVerbosity(), false);
+        }
+        $output->writeln([
+            '[WARNING] --execute performs real writes to PostgreSQL.',
+            'Stop writes to MySQL and stop application/worker traffic to the PostgreSQL target before proceeding.',
+            'MySQL changes committed after the snapshot is established will NOT be transferred.',
+            'Target tables must be empty; this will be checked before loading.',
+            'The command cannot verify that source writes have stopped. Application cutover is a separate step.',
+        ], OutputInterface::VERBOSITY_QUIET);
     }
 
     private function showChanges(SymfonyStyle $io, array $changes): void

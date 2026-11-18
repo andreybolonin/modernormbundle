@@ -8,7 +8,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\ParameterType;
 
-/** Transaction-neutral loader shared by rehearsal and future transfer execution. */
+/** Transaction-neutral loader shared by rehearsal and final transfer execution. */
 final class Loader
 {
     public function load(Connection $source, Connection $target, array $plan, int $maxExamples, ?TransformationRules $rules = null, int $maxChanges = 100, ?TransformationLog $log = null): array
@@ -20,7 +20,7 @@ final class Loader
             if (!$source->isTransactionActive() || !$target->isTransactionActive()) {
                 throw new \RuntimeException('Loading requires active source-snapshot and target transactions.');
             }
-            (new RehearsalGuard())->lockTargets($target, $plan);
+            (new TargetGuard())->lockTargets($target, $plan);
             $report['stage'] = 'validation';
             $report['validation'] = (new DataValidator())->validate($source, $target, $plan, $maxExamples, $rules, $maxChanges, $log);
             if ($report['validation']['error_count'] !== 0) {
@@ -109,7 +109,7 @@ final class Loader
             $report['transformations'] = $journal->report();
             $report['sqlstate'] = $error instanceof DriverException ? $error->getSQLState() : null;
             $report['failure_type'] = (new \ReflectionClass($error))->getShortName();
-            $reason = $error instanceof \Doctrine\DBAL\Exception ? 'Database rejected rehearsal at stage '.$report['stage'].' (SQLSTATE '.($report['sqlstate'] ?? 'unknown').').' : $error->getMessage();
+            $reason = $error instanceof \Doctrine\DBAL\Exception ? 'Database rejected transfer at stage '.$report['stage'].' (SQLSTATE '.($report['sqlstate'] ?? 'unknown').').' : $error->getMessage();
             throw new LoadFailure($report, $reason);
         }
     }

@@ -12,6 +12,8 @@ Use `--rules=rules.json` for explicit shared transformations and `--change-log`
 for a streaming audit of changed PKs.
 `--dry-run --suggest-rules` offers an interactive selection of rules, saves a new
 reviewed JSON file and revalidates it without loading data.
+Use `--execute` for the final transfer to the explicitly selected empty PostgreSQL
+target after stopping source writes. Application cutover remains a separate step.
 
 **Find expensive ORM work in Symfony. Follow it from the Profiler to Grafana.**
 

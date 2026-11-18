@@ -1,9 +1,9 @@
 # Plan a MySQL to PostgreSQL data transfer
 
-`modernorm:data:transfer` supports read-only planning (`--dry-run`) and real loading
-into a separate rehearsal database (`--rehearsal`). Choose exactly one mode.
-Loading into the configured application database, automatic DDL and resume are
-not supported.
+`modernorm:data:transfer` supports read-only planning (`--dry-run`), real loading
+into a separate rehearsal database (`--rehearsal`) and final loading (`--execute`).
+Choose exactly one mode. Automatic DDL, application cutover and resume are not
+supported. `--execute` permits the explicitly selected application database.
 
 ```bash
 php bin/console modernorm:data:transfer \
@@ -174,7 +174,8 @@ changes, not committed rows; inspect `target_data_committed`.
 scanning. Set it to zero for counts-only reports. To retain **every PK** rather
 than bounded examples, `--change-log` streams one JSONL event per rule change.
 The parent directory must exist and the destination file must be new; it is never
-overwritten or appended to. This option requires `--validate-data` or `--rehearsal`.
+overwritten or appended to. This option requires `--validate-data`, `--rehearsal`
+or `--execute`.
 The stream preserves exact PKs (base64 for invalid UTF-8), phase, rule, table,
 column and rules hash; source/target value payloads are not logged. Summary PK
 examples remain bounded for memory use. Keep the journal with the matching rule
@@ -197,7 +198,7 @@ php bin/console modernorm:data:transfer \
 ```
 
 `--suggest-rules` implies full value validation and requires interactive text-mode
-`--dry-run`. It rejects `--no-interaction`, JSON output, `--rehearsal` and
+`--dry-run`. It rejects `--no-interaction`, JSON output, `--rehearsal`, `--execute` and
 `--change-log`. It never loads a database or starts rehearsal after saving.
 Structural blockers must be resolved before suggestions can be collected.
 
@@ -312,6 +313,62 @@ reports `target_data_committed: null`; inspect the database before retrying.
 The rehearsal covers the chosen snapshot and database setup, not future changes
 or external production behavior. Stop writes for an eventual real migration.
 
+## Final transfer and production cutover
+
+`--execute` is the explicit final write mode. It permits the PostgreSQL database
+configured for the application, unlike `--rehearsal`. The target URL must still be
+provided explicitly; no default application URL is silently selected.
+
+```bash
+APP_ENV=prod APP_DEBUG=0 php bin/console modernorm:data:transfer \
+    --source-url-env=MYSQL_DATABASE_URL \
+    --target-url-env=POSTGRES_DATABASE_URL \
+    --rules=rules.proposed.json \
+    --change-log=production-transfer.jsonl \
+    --batch-size=1000 --execute --format=json
+```
+
+Use the schema and rules already verified by rehearsal. Before running, stop
+source writes and keep application/worker traffic off the target. The command
+does not enable maintenance mode or prove that source writes have stopped. Its
+consistent InnoDB snapshot does not include changes committed after the snapshot
+was established; this is not change-data capture or an online cutover.
+
+Before opening database connections or starting validation, `--execute` prints a
+warning about real writes, stopping source writes/target traffic, snapshot limits
+and the empty-target requirement. In the normal Console it goes to stderr,
+including with `--format=json`, so stdout remains a JSON report. It is also shown
+in quiet mode (explicit silent output suppresses it). This is an informational
+warning, not an extra confirmation or proof that maintenance mode is enabled.
+
+The final mode uses exactly the same loader, rules, complete value validation,
+table locks, empty-target checks, INSERT RETURNING PK verification, deferred
+constraint enforcement, row-count/PK checks and owned-sequence resets as rehearsal.
+Validation is mandatory even without `--validate-data`. `--execute` is sufficient
+authorization for the explicit target, including scripted `--no-interaction` runs;
+there is no extra prompt or implicit fallback to a different mode. It cannot be
+combined with `--dry-run`, `--rehearsal` or `--suggest-rules`.
+
+The target must be PostgreSQL with normal origin-role enforcement, active triggers
+and supported non-RLS tables. Template databases are rejected. Planned targets
+must be empty; nothing is truncated, upserted, skipped or resumed automatically.
+Failures stop loading and roll back table writes where possible. As in rehearsal,
+sequences and external trigger effects can survive rollback, and a lost COMMIT
+response can leave the outcome uncertain. Inspect the target before retrying.
+
+JSON reports use `mode: execute` and a `transfer` result (rather than `rehearsal`),
+with the same statuses and verification counters. `connections` identifies source
+and target database names without credentials. Only a successful verified COMMIT
+sets `transfer.status: committed` and `target_data_committed: true`; failures use
+false, or null for an uncertain COMMIT. The change-log end outcome follows this
+result. A second execution against committed nonempty tables is refused.
+
+After exit code 0 and a committed result, check the report and direct application
+traffic to PostgreSQL through your normal configuration/deployment procedure.
+Reset reused entity/result caches and restart long-lived workers as appropriate
+before allowing writes. Connection settings, environment files, services and
+processes are never changed by this command. Source data remains untouched.
+
 ## Reports and exit codes
 
 Text reports list tables, column conversions, effective batch sizes, sequence
@@ -331,7 +388,7 @@ unsupported introspection types and invalid ORM metadata can fail earlier with
 a Console error. JSON reports include `data_scanned` and prerequisites
 for any future loader. Success is **not** a promise that all rows can be copied.
 
-In rehearsal mode, exit code 0 means the load committed after verification.
+In rehearsal or execute mode, exit code 0 means the load committed after verification.
 Structural, value, insert, deferred-constraint, verification or sequence failures
 return a failing report and exit code 1. Isolation guard failures reject the
 command before loading.
@@ -344,8 +401,8 @@ triggers, permissions, RLS visibility, timezone conversion policy, SET business
 semantics and other server behavior need review. `constraints_checked` remains
 false. The scan is not a trial load or a complete migration audit.
 
-A future loader must stop source writes, recheck an empty target, preserve IDs
-(including PostgreSQL GENERATED ALWAYS identity handling), copy bounded batches,
-reset sequences, and verify counts and referential integrity. It must validate
-values again because they may have changed since dry run. Restarting after a
+Final transfer requires stopping source writes, rechecking an empty target and preserving IDs
+(including PostgreSQL GENERATED ALWAYS identity handling), copying bounded batches,
+resetting owned sequences, and checking counts and referential integrity. The
+loader validates values again because they may have changed since dry run. Restarting after a
 partial transfer must fail until an explicit recovery strategy is implemented.

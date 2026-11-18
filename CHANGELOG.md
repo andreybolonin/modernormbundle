@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Print an upfront `--execute` warning before opening database connections: stop MySQL writes and target traffic, account for snapshot limits and require empty target tables. Keep JSON stdout clean by using stderr.
+
+- Add explicit `modernorm:data:transfer --execute` for final MySQL → PostgreSQL loading, including the configured application database. Reuse rehearsal validation, transformations, transactional loading, constraint/count/PK checks and owned-sequence resets; modes are exclusive, empty targets remain required and application configuration is never switched automatically.
+
 ## 0.1.0-beta.6 — 2026-11-18
 
 - Generate new attribute entities from PostgreSQL or MySQL 8.4 with `modernorm:mapping:import`, including separate source URLs, dry-run, identity/serial IDs, simple associations and explicit unsupported-feature reports.

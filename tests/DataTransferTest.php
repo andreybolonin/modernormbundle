@@ -10,6 +10,7 @@ use ModernORM\Bundle\DataTransfer\TransferCommand;
 use ModernORM\Bundle\DataTransfer\TypeCompatibility;
 use ModernORM\Bundle\DataTransfer\EnvironmentConnection;
 use ModernORM\Bundle\DataTransfer\RehearsalGuard;
+use ModernORM\Bundle\DataTransfer\TargetGuard;
 use Doctrine\DBAL\Connection;
 use ModernORM\Configuration;
 use PHPUnit\Framework\TestCase;
@@ -119,5 +120,56 @@ final class DataTransferTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('without --rehearsal');
         $tester->execute(['--rehearsal' => true, '--suggest-rules' => true], ['interactive' => true]);
+    }
+
+    public function testExecuteCannotBeCombinedWithDryRunOrRehearsal(): void
+    {
+        $tester = new CommandTester(new TransferCommand(new Configuration()));
+        foreach (['--dry-run', '--rehearsal'] as $mode) {
+            try {
+                $tester->execute(['--execute' => true, $mode => true]);
+                self::fail('Write modes must be exclusive.');
+            } catch (\InvalidArgumentException $error) {
+                self::assertStringContainsString('exclusively', $error->getMessage());
+            }
+        }
+    }
+
+    public function testSuggestionsCannotExecuteProductionTransfer(): void
+    {
+        $tester = new CommandTester(new TransferCommand(new Configuration()));
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('--execute');
+        $tester->execute(['--execute' => true, '--suggest-rules' => true], ['interactive' => true]);
+    }
+
+    public function testFinalTransferStillRequiresNormalConstraintEnforcement(): void
+    {
+        $target = $this->createMock(Connection::class);
+        $target->method('fetchOne')->willReturnOnConsecutiveCalls('app_database', 'replica');
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('session_replication_role=origin');
+        (new TargetGuard())->checkDatabase($target);
+    }
+
+    public function testExecuteWarnsBeforeOpeningConnectionsAndKeepsStdoutClean(): void
+    {
+        foreach ([['text', \Symfony\Component\Console\Output\OutputInterface::VERBOSITY_NORMAL], ['json', \Symfony\Component\Console\Output\OutputInterface::VERBOSITY_NORMAL], ['json', \Symfony\Component\Console\Output\OutputInterface::VERBOSITY_QUIET]] as [$format, $verbosity]) {
+            $tester = new CommandTester(new TransferCommand(new Configuration()));
+            try {
+                $tester->execute(['--execute' => true, '--format' => $format, '--source-url-env' => 'MODERNORM_MISSING_WARNING_'.bin2hex(random_bytes(5)), '--target-url-env' => 'TARGET'], ['capture_stderr_separately' => true, 'interactive' => false, 'verbosity' => $verbosity]);
+                self::fail('Missing source environment variable must fail.');
+            } catch (\InvalidArgumentException $error) {
+                self::assertStringContainsString('empty or missing', $error->getMessage());
+            }
+            self::assertSame('', $tester->getDisplay());
+            $warning = $tester->getErrorOutput();
+            self::assertStringContainsString('real writes to PostgreSQL', $warning);
+            self::assertStringContainsString('Stop writes to MySQL', $warning);
+            self::assertStringContainsString('application/worker traffic', $warning);
+            self::assertStringContainsString('will NOT be transferred', $warning);
+            self::assertStringContainsString('must be empty', $warning);
+            self::assertStringContainsString('cannot verify', $warning);
+        }
     }
 }
