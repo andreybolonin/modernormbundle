@@ -27,7 +27,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: pdo_pgsql, ctype, iconv, mbstring, dom, xml, xmlwriter
+          extensions: pdo_pgsql, pdo_mysql, ctype, iconv, mbstring, dom, xml, xmlwriter
           tools: composer:v2
           coverage: none
       - run: composer validate --strict
@@ -47,7 +47,19 @@ jobs:
     env:
       COMPOSER_ROOT_VERSION: 0.1.0-beta.5
       MODERNORM_TEST_URL: postgresql://postgres:postgres@127.0.0.1:5432/modernorm_test
+      MODERNORM_TEST_MYSQL_URL: mysql://root:modernorm@127.0.0.1:3306/mysql
     services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: modernorm
+          MYSQL_ROOT_HOST: '%'
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pmodernorm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
       postgres:
         image: postgres:17
         env:
@@ -70,7 +82,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: pdo_pgsql, ctype, iconv, mbstring, dom, xml, xmlwriter
+          extensions: pdo_pgsql, pdo_mysql, ctype, iconv, mbstring, dom, xml, xmlwriter
           tools: composer:v2
           coverage: none
 
@@ -92,7 +104,7 @@ jobs:
       - name: Check installed platform requirements
         run: composer check-platform-reqs
 
-      - name: Unit and PostgreSQL integration tests
+      - name: Unit, PostgreSQL and MySQL import integration tests
         run: composer test -- --fail-on-skipped
 
       - name: Migrations and fixtures from an empty schema
@@ -122,8 +134,20 @@ jobs:
     env:
       COMPOSER_ROOT_VERSION: 0.1.0-beta.5
       MODERNORM_TEST_URL: postgresql://postgres:postgres@127.0.0.1:5432/modernorm_test
+      MODERNORM_TEST_MYSQL_URL: mysql://root:modernorm@127.0.0.1:3306/mysql
       MODERNORM_CORE_PATH: ${{ github.workspace }}/modernorm-core
     services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: modernorm
+          MYSQL_ROOT_HOST: '%'
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pmodernorm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
       postgres:
         image: postgres:${{ matrix.postgresql }}
         env:
@@ -150,7 +174,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: pdo_pgsql, ctype, iconv, mbstring, dom, xml, xmlwriter
+          extensions: pdo_pgsql, pdo_mysql, ctype, iconv, mbstring, dom, xml, xmlwriter
           tools: composer:v2
           coverage: none
       - run: composer install --no-interaction --prefer-dist --no-progress

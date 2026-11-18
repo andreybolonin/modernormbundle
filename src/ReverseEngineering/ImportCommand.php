@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace ModernORM\Bundle\ReverseEngineering;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Tools\DsnParser;
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -20,8 +23,9 @@ final class ImportCommand extends Command
 
     protected function configure(): void
     {
-        $this->setDescription('Generate new attribute entities from an existing PostgreSQL schema.')
-            ->addOption('schema', null, InputOption::VALUE_REQUIRED, 'Exact PostgreSQL schema name.', 'public')
+        $this->setDescription('Generate new attribute entities from PostgreSQL or MySQL.')
+            ->addOption('schema', null, InputOption::VALUE_REQUIRED, 'PostgreSQL schema (default: public) or MySQL database (default: connected database).')
+            ->addOption('source-url-env', null, InputOption::VALUE_REQUIRED, 'Environment variable holding a separate PostgreSQL/MySQL source URL.')
             ->addOption('namespace', null, InputOption::VALUE_REQUIRED, 'Entity namespace.', 'App\\Entity')
             ->addOption('output', null, InputOption::VALUE_REQUIRED, 'Output directory, relative to the project root or absolute.', 'src/Entity')
             ->addOption('table', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Exact table name; repeat to select multiple tables.')
@@ -34,15 +38,27 @@ final class ImportCommand extends Command
         $namespace = $input->getOption('namespace');
         $schema = $input->getOption('schema');
         $directory = $input->getOption('output');
-        if (!is_string($namespace) || preg_match('/^[A-Za-z_][A-Za-z0-9_]*(?:\\\\[A-Za-z_][A-Za-z0-9_]*)*$/D', $namespace) !== 1 || !is_string($schema) || $schema === '' || !is_string($directory) || $directory === '') {
+        if (!is_string($namespace) || preg_match('/^[A-Za-z_][A-Za-z0-9_]*(?:\\\\[A-Za-z_][A-Za-z0-9_]*)*$/D', $namespace) !== 1 || ($schema !== null && (!is_string($schema) || $schema === '')) || !is_string($directory) || $directory === '') {
             throw new \InvalidArgumentException('Provide a valid namespace, nonempty schema and output directory.');
         }
         // Let PHP validate reserved namespace segments as well as lexical syntax.
         if (token_get_all('<?php namespace '.$namespace.'; class ImportNamespaceProbe {}', TOKEN_PARSE) === []) {
             throw new \InvalidArgumentException('Invalid namespace.');
         }
-        $snapshot = (new SchemaReader($this->connection))->read($schema, $input->getOption('table'));
-        $plan = (new EntityGenerator())->generate($snapshot['tables'], $namespace, $schema, $snapshot['sequences']);
+        $source = $this->sourceConnection($input->getOption('source-url-env'));
+        try {
+            $platform = $source->getDatabasePlatform();
+            $schema ??= $platform instanceof AbstractMySQLPlatform ? $source->getDatabase() : 'public';
+            if ($schema === null || $schema === '') {
+                throw new \InvalidArgumentException('Specify --schema or include a database in the source URL.');
+            }
+            $snapshot = (new SchemaReader($source))->read($schema, $input->getOption('table'));
+            $plan = (new EntityGenerator())->generate($snapshot['tables'], $namespace, $schema, $snapshot['sequences'], $platform);
+        } finally {
+            if ($source !== $this->connection) {
+                $source->close();
+            }
+        }
         foreach ($plan['files'] as $file => $code) {
             try {
                 if (token_get_all($code, TOKEN_PARSE) === []) {
@@ -89,5 +105,29 @@ final class ImportCommand extends Command
         $io->success(sprintf('%s %d entities. Review warnings and validate the mapping before use.', $input->getOption('dry-run') ? 'Previewed' : 'Created', count($plan['files'])));
 
         return self::SUCCESS;
+    }
+
+    private function sourceConnection(?string $environment): Connection
+    {
+        if ($environment === null) {
+            return $this->connection;
+        }
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $environment) !== 1) {
+            throw new \InvalidArgumentException('Invalid source environment variable name.');
+        }
+        $url = $_SERVER[$environment] ?? $_ENV[$environment] ?? getenv($environment);
+        if (!is_string($url) || $url === '') {
+            throw new \InvalidArgumentException('Source environment variable '.$environment.' is empty or missing.');
+        }
+        try {
+            $params = (new DsnParser(['mysql' => 'pdo_mysql', 'postgres' => 'pdo_pgsql', 'postgresql' => 'pdo_pgsql', 'pgsql' => 'pdo_pgsql']))->parse($url);
+        } catch (\Throwable) {
+            throw new \InvalidArgumentException('Invalid database URL in '.$environment.'.');
+        }
+        if (!in_array($params['driver'] ?? null, ['pdo_mysql', 'pdo_pgsql'], true)) {
+            throw new \InvalidArgumentException('Source URL must use MySQL or PostgreSQL via PDO.');
+        }
+
+        return DriverManager::getConnection($params);
     }
 }

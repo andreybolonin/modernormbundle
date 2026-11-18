@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Support MySQL schema sources in `modernorm:mapping:import` via `--source-url-env`, with AUTO_INCREMENT, unsigned types, ENUM/SET, platform-aware indexes, explicit manual-review warnings and MySQL 8.4 CI coverage. Application persistence remains PostgreSQL-only.
+
 - Add `modernorm:mapping:import` to generate new attribute entities from existing PostgreSQL tables, with schema/table selection, dry-run, simple owning associations, identity/serial IDs and explicit unsupported-mapping reports.
 
 ## 0.1.0-beta.5 — 2026-11-17

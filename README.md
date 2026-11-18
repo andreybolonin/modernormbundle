@@ -1,6 +1,6 @@
 # ModernORMBundle
 
-Generate entities from an existing PostgreSQL database with
+Generate entities from an existing PostgreSQL or MySQL database with
 [`modernorm:mapping:import`](docs/reverse-engineering.md), including a dry-run preview.
 
 **Find expensive ORM work in Symfony. Follow it from the Profiler to Grafana.**

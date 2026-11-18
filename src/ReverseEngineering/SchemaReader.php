@@ -6,6 +6,8 @@ namespace ModernORM\Bundle\ReverseEngineering;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
+use Doctrine\DBAL\Platforms\MariaDBPlatform;
 use Doctrine\DBAL\Schema\Table;
 
 final class SchemaReader
@@ -20,8 +22,12 @@ final class SchemaReader
      */
     public function read(string $schema, array $selected): array
     {
+        $platform = $this->connection->getDatabasePlatform();
+        if ($platform instanceof AbstractMySQLPlatform && !$platform instanceof MariaDBPlatform) {
+            return (new MySqlSchemaReader($this->connection))->read($schema, $selected);
+        }
         if (!$this->connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
-            throw new \LogicException('Reverse engineering currently requires PostgreSQL.');
+            throw new \LogicException('Reverse engineering supports PostgreSQL and MySQL; MariaDB is not supported.');
         }
         if (!$this->connection->fetchOne('SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = ?', [$schema])) {
             throw new \InvalidArgumentException('Unknown schema: '.$schema);

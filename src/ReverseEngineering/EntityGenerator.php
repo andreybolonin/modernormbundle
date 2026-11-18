@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace ModernORM\Bundle\ReverseEngineering;
 
 use Doctrine\DBAL\Schema\Table;
+use Doctrine\DBAL\Platforms\AbstractPlatform;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
+use Doctrine\DBAL\Schema\DefaultExpression;
 
 /**
  * Generates attributes only; database expressions are never evaluated as PHP.
@@ -30,8 +33,9 @@ final class EntityGenerator
     /** @param array<string, Table> $tables
      *  @return array{files: array<string, string>, warnings: list<string>}
      */
-    public function generate(array $tables, string $namespace, string $schema, array $sequences = []): array
+    public function generate(array $tables, string $namespace, string $schema, array $sequences = [], ?AbstractPlatform $platform = null): array
     {
+        $platform ??= new PostgreSQLPlatform();
         $files = $warnings = $classes = [];
         foreach ($tables as $name => $table) {
             $pk = $this->primaryColumns($table);
@@ -54,18 +58,18 @@ final class EntityGenerator
             $uniqueNames = [];
             foreach ($table->getUniqueConstraints() as $constraint) {
                 $uniqueNames[] = $constraint->getName();
-                $columns = array_map(static fn ($column): string => $column->toSQL(new \Doctrine\DBAL\Platforms\PostgreSQLPlatform()), $constraint->getColumnNames());
+                $columns = array_map(static fn ($column): string => $column->toSQL($platform), $constraint->getColumnNames());
                 $attributes[] = '#[ORM\\UniqueConstraint(name: '.$this->literal($constraint->getName()).', columns: '.$this->literal($columns).')]';
             }
             foreach ($table->getIndexes() as $index) {
                 if ($index->isPrimary() || in_array($index->getName(), $uniqueNames, true)) {
                     continue;
                 }
-                if ($index->getFlags() !== [] || $index->getOptions() !== []) {
+                if ($index->getFlags() !== [] || $index->getOptions() !== [] || array_any($index->getIndexedColumns(), static fn ($column): bool => $column->getLength() !== null)) {
                     $warnings[] = $name.': index '.$index->getName().' requires manual review.';
                     continue;
                 }
-                $columns = $index->getQuotedColumns(new \Doctrine\DBAL\Platforms\PostgreSQLPlatform());
+                $columns = $index->getQuotedColumns($platform);
                 $attributes[] = '#[ORM\\'.($index->isUnique() ? 'UniqueConstraint' : 'Index').'(name: '.$this->literal($index->getName()).', columns: '.$this->literal($columns).')]';
             }
             $relations = [];
@@ -105,9 +109,10 @@ final class EntityGenerator
                 }
                 $type = $column->getTypeName();
                 $phpType = match ($type) {
-                    'smallint', 'integer', 'bigint' => 'int',
+                    'smallint', 'integer' => 'int',
+                    'bigint' => $column->getUnsigned() ? 'int|string' : 'int',
                     'boolean' => 'bool', 'float', 'smallfloat' => 'float',
-                    'decimal', 'string', 'ascii_string', 'text', 'guid' => 'string',
+                    'decimal', 'string', 'ascii_string', 'text', 'guid', 'enum' => 'string',
                     'json', 'jsonb', 'simple_array' => 'array',
                     'json_object', 'jsonb_object' => 'mixed',
                     'date', 'datetime', 'datetimetz', 'time' => '\\DateTime',
@@ -140,12 +145,24 @@ final class EntityGenerator
                     $args[] = 'scale: '.$column->getScale();
                 }
                 $options = $column->getPlatformOptions();
+                if ($column->getUnsigned()) {
+                    $options['unsigned'] = true;
+                }
+                if ($type === 'enum') {
+                    $options['values'] = $column->getValues();
+                    $warnings[] = $name.'.'.$columnName.': ENUM values retained; verify target database support.';
+                }
                 if ($column->getComment() !== '') {
                     $options['comment'] = $column->getComment();
                 }
                 if ($column->getDefault() !== null && !$column->getAutoincrement()) {
-                    $options['default'] = $column->getDefault();
-                    if (!isset($sequences[$name][$columnName])) {
+                    $default = $column->getDefault();
+                    if ($default instanceof DefaultExpression) {
+                        $warnings[] = $name.'.'.$columnName.': SQL expression default '.$default->toSQL($platform).' requires manual mapping and was omitted.';
+                    } else {
+                        $options['default'] = $default;
+                    }
+                    if (!$default instanceof DefaultExpression && !isset($sequences[$name][$columnName])) {
                         $warnings[] = $name.'.'.$columnName.': SQL default retained in mapping; review expression defaults.';
                     }
                 }
@@ -157,7 +174,8 @@ final class EntityGenerator
                 }
                 $lines[] = '#[ORM\\Column('.implode(', ', $args).')]';
                 $nullable = !$column->getNotnull() || ($columnName === $pk && $column->getAutoincrement());
-                $lines[] = 'public '.($nullable && $phpType !== 'mixed' ? '?' : '').$phpType.' $'.$property.($nullable ? ' = null' : '').';';
+                $declarationType = $nullable && $phpType !== 'mixed' ? (str_contains($phpType, '|') ? $phpType.'|null' : '?'.$phpType) : $phpType;
+                $lines[] = 'public '.$declarationType.' $'.$property.($nullable ? ' = null' : '').';';
                 $properties[] = '    '.implode("\n    ", $lines);
             }
             $files[$class.'.php'] = "<?php\n\ndeclare(strict_types=1);\n\nnamespace ".$namespace.";\n\nuse ModernORM\\Mapping as ORM;\n\n".implode("\n", $attributes)."\nclass ".$class."\n{\n".implode("\n\n", $properties)."\n}\n";
