@@ -98,6 +98,153 @@ describes coverage, not whether values passed: inspect `error_count` and the exi
 code. The source and target session timezones are included for review; validation
 does not infer timezone conversion or business rules.
 
+## Explicit transformation rules and change journal
+
+Use the same JSON rule file to fix known source values in both validation and
+loading. No business transformations are enabled by default. Review each rule:
+replacing an unknown amount with zero or a zero date with NULL is a business
+decision, and the target schema must permit the result.
+
+```json
+{
+  "version": 1,
+  "rules": [
+    {"id": "trim_email", "table": "users", "column": "email", "operation": "trim"},
+    {"id": "zero_created_at", "table": "users", "column": "created_at", "operation": "replace", "from": "0000-00-00 00:00:00", "to": null},
+    {"id": "default_amount", "table": "orders", "column": "amount", "operation": "null_to", "value": "0.00"}
+  ]
+}
+```
+
+[Example file](examples/data-transfer-rules.json) — copy and adapt table/column
+names and values to your schema. Identifiers are exact, not patterns. The rules
+file is a readable JSON file, never executable PHP. Relative paths use the current
+working directory. Unknown keys, operations, duplicate IDs and invalid arguments
+fail explicitly before connecting to databases. Use quoted strings for decimals
+and large numbers; floating-point JSON arguments are rejected.
+
+- `trim` removes ASCII spaces, tabs and line whitespace from both ends. It leaves
+  NULL unchanged, preserves NUL bytes for validation to reject, and requires a
+  text-like target column. It does not truncate values to a maximum length.
+- `replace` changes an exact `from` value to `to`. NULL matches only NULL; other
+  scalars compare using the same text representation used by PostgreSQL binding.
+  Thus `1` and `"1"` match, while `"1.00"` and `"1"` do not. Account for the exact
+  source date/decimal representation, including fractional digits.
+- `null_to` replaces only NULL with `value`. It does not match an empty string.
+
+Rules run in file order, so a later rule sees earlier results. The file is loaded
+once into an immutable rule set; validation and loading use that same instance
+and report its SHA-256 hash. A changed file affects the next run only. Unknown
+tables/columns, binary transformations and any rule on PK/FK columns (including
+referenced unique columns) are blocked. Coordinated key remapping and row skipping
+are unsupported. Rules cannot bypass structural blockers or disable constraints.
+
+```bash
+php bin/console modernorm:data:transfer \
+    --source-url-env=MYSQL_DATABASE_URL \
+    --target-url-env=POSTGRES_DATABASE_URL \
+    --dry-run --validate-data --rules=var/migration/rules.json \
+    --max-change-examples=100 --change-log=var/migration/validation-changes.jsonl
+
+php bin/console modernorm:data:transfer \
+    --source-url-env=MYSQL_DATABASE_URL \
+    --target-url-env=REHEARSAL_POSTGRES_DATABASE_URL \
+    --rehearsal --rules=var/migration/rules.json \
+    --change-log=var/migration/rehearsal-changes.jsonl
+```
+
+Validation checks the transformed values against target types/nullability. The
+loader applies the identical rules from the same source snapshot before binding
+values. The source is never changed. Target constraints still run: a transform
+that creates a UNIQUE conflict fails rehearsal and rolls back table writes.
+Repeat in a clean disposable rehearsal database after fixing schema, source or
+rules. A plain `--dry-run --rules=...` checks rule bindings and reports the rules,
+but does not read values or claim changes were applied.
+
+`validation.transformations` and `rehearsal.transformations` contain separate
+phase reports. Each includes full counters, a rules hash, per-rule counts and
+bounded PK/column examples. `changed_rows`/`changed_values` count rows/cells whose
+final wire representation differs from the original. `rule_changes` and per-rule
+counts count every effective transition, including a later rule reversing an
+earlier one. No-op rules count zero. Do not add validation and load phase totals:
+they describe two passes over the same data. A failed load phase records attempted
+changes, not committed rows; inspect `target_data_committed`.
+
+`--max-change-examples` defaults to 100 per phase and never stops counting or
+scanning. Set it to zero for counts-only reports. To retain **every PK** rather
+than bounded examples, `--change-log` streams one JSONL event per rule change.
+The parent directory must exist and the destination file must be new; it is never
+overwritten or appended to. This option requires `--validate-data` or `--rehearsal`.
+The stream preserves exact PKs (base64 for invalid UTF-8), phase, rule, table,
+column and rules hash; source/target value payloads are not logged. Summary PK
+examples remain bounded for memory use. Keep the journal with the matching rule
+file/hash for review.
+
+JSONL has start/change/end events. End outcomes include `validated`, `committed`,
+`failed`, `exception` and `commit_uncertain`. Missing end events mean an incomplete
+run, not success. Load events can precede a rolled-back batch. Logging failures
+stop processing; a finalization failure after COMMIT reports the target outcome
+and requires inspection. The journal is an audit of rule application, not a data
+backup or proof that target transactions committed.
+
+## Interactively suggest and save rules
+
+```bash
+php bin/console modernorm:data:transfer \
+    --source-url-env=MYSQL_DATABASE_URL \
+    --target-url-env=POSTGRES_DATABASE_URL \
+    --dry-run --suggest-rules --rules-output=rules.proposed.json
+```
+
+`--suggest-rules` implies full value validation and requires interactive text-mode
+`--dry-run`. It rejects `--no-interaction`, JSON output, `--rehearsal` and
+`--change-log`. It never loads a database or starts rehearsal after saving.
+Structural blockers must be resolved before suggestions can be collected.
+
+The scan aggregates evidence from **every source row**, independently of the
+error-example limit (even `--max-error-examples=0`). Existing `--rules` are applied
+first. The first version proposes:
+
+- `trim` for leading/trailing ASCII whitespace on eligible text columns;
+- exact zero-date replacement with NULL when the target permits NULL;
+- a user-entered replacement for zero dates in required columns;
+- a user-entered value for NULL in required columns.
+
+The menu always defaults to Skip. You can instead choose to fix the source/schema
+manually. Replacement values are explicit non-null JSON strings, integers or
+booleans; quote decimals. No arbitrary source values are retained for proposals.
+PK/FK and binary columns receive no transformation suggestions. Diagnostics for
+other errors are shown with counts; the wizard does not guess truncation, widening,
+deduplication, key remapping or timezone policies. UNIQUE conflicts and CHECK/
+trigger behavior still need a separate rehearsal.
+
+Selected rules are appended to the complete existing rule set. The wizard shows
+the full proposed JSON and asks for confirmation (default No). No selection or a
+declined save creates no file. `--rules-output` defaults to `rules.proposed.json`;
+its parent directory must exist and be writable, and the file must be new.
+Existing paths, including the input rule file, are never overwritten. Use a new
+output name on subsequent runs, optionally loading the previous version with
+`--rules`.
+
+After saving, the command repeats full validation in the same read-only source/
+target snapshots using the new immutable rule set. Counts shown in suggestions
+describe the initial scan; combined rules may have different final effects.
+The final report shows actual transformations and remaining errors. A bad chosen
+replacement leaves the new file available for editing but produces a failing
+validation exit code. Confirmation means save and validate, not that values are
+already valid. Interactive waiting and the second scan keep database snapshots
+open, so long sessions have the same operational cost as long read transactions.
+
+Review schema migrations, source fixes or the saved rules, then run a separate
+validation with `--change-log` or a rehearsal in a clean disposable database:
+
+```bash
+php bin/console modernorm:data:transfer \
+    --source-url-env=MYSQL_DATABASE_URL \
+    --target-url-env=REHEARSAL_POSTGRES_DATABASE_URL \
+    --rehearsal --rules=rules.proposed.json --change-log=rehearsal-changes.jsonl
+```
+
 ## Rehearse a real load
 
 Create a disposable PostgreSQL database and apply the **same migrations,

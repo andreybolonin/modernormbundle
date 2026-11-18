@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add interactive `modernorm:data:transfer --dry-run --suggest-rules`: aggregate full-scan evidence, offer explicit trim/zero-date/required-NULL choices, preserve existing rules in a new reviewed JSON file and revalidate without loading data. Noninteractive runs, overwrites and rehearsal combinations are rejected.
+
+- Add versioned JSON transformation rules (`trim`, `replace`, `null_to`) shared by validation and rehearsal loading, with PK/FK protection, per-rule counters, bounded examples and an optional complete JSONL change journal. Values remain subject to target validation and constraints.
+
 - Add `modernorm:data:transfer --rehearsal`: validate and load an explicitly separate PostgreSQL database with real constraints/triggers, atomic row loading, ID preservation, count/PK verification and owned-sequence resets. Reuse batch reading and scalar conversion with dry-run validation; application database loading remains blocked.
 
 - Add `modernorm:data:transfer --dry-run --validate-data`: scan all InnoDB source rows using bounded keyset batches, validate PostgreSQL type input and lossy conversions without inserts, and report exact counts with bounded PK/column error examples. UNIQUE/FK/CHECK constraints and triggers remain outside validation.

@@ -11,8 +11,10 @@ use Doctrine\DBAL\ParameterType;
 /** Transaction-neutral loader shared by rehearsal and future transfer execution. */
 final class Loader
 {
-    public function load(Connection $source, Connection $target, array $plan, int $maxExamples): array
+    public function load(Connection $source, Connection $target, array $plan, int $maxExamples, ?TransformationRules $rules = null, int $maxChanges = 100, ?TransformationLog $log = null): array
     {
+        $rules ??= TransformationRules::empty();
+        $journal = new TransformationJournal($rules, 'load', $maxChanges, $log);
         $report = ['status' => 'loading', 'stage' => 'preflight', 'table' => null, 'batch' => 0, 'rows_loaded' => 0, 'tables' => [], 'validation' => null, 'constraints_checked' => false, 'sequences_reset' => [], 'target_data_committed' => false];
         try {
             if (!$source->isTransactionActive() || !$target->isTransactionActive()) {
@@ -20,9 +22,10 @@ final class Loader
             }
             (new RehearsalGuard())->lockTargets($target, $plan);
             $report['stage'] = 'validation';
-            $report['validation'] = (new DataValidator())->validate($source, $target, $plan, $maxExamples);
+            $report['validation'] = (new DataValidator())->validate($source, $target, $plan, $maxExamples, $rules, $maxChanges, $log);
             if ($report['validation']['error_count'] !== 0) {
                 $report['status'] = 'validation_failed';
+                $report['transformations'] = $journal->report();
 
                 return $report;
             }
@@ -43,6 +46,7 @@ final class Loader
                     ++$report['batch'];
                     $parameters = $types = $tuples = $keyInputs = [];
                     foreach ($rows as $row) {
+                        $row = $rules->applyRow($name, $row, [$key => $row[$key]], $journal);
                         $expressions = [];
                         $keyInputs[] = $values->input($row[$key]);
                         foreach ($table['columns'] as $entry) {
@@ -97,10 +101,12 @@ final class Loader
             $report['table'] = null;
             $this->resetSequences($target, $plan, $report);
             $report['status'] = 'loaded';
+            $report['transformations'] = $journal->report();
 
             return $report;
         } catch (\Throwable $error) {
             $report['status'] = 'failed';
+            $report['transformations'] = $journal->report();
             $report['sqlstate'] = $error instanceof DriverException ? $error->getSQLState() : null;
             $report['failure_type'] = (new \ReflectionClass($error))->getShortName();
             $reason = $error instanceof \Doctrine\DBAL\Exception ? 'Database rejected rehearsal at stage '.$report['stage'].' (SQLSTATE '.($report['sqlstate'] ?? 'unknown').').' : $error->getMessage();

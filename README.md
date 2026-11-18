@@ -8,6 +8,10 @@ Plan a MySQL → PostgreSQL data migration with
 checks structure and dependencies; add `--validate-data` to scan all source rows
 for value compatibility. Use `--rehearsal` to load and verify a separate disposable
 PostgreSQL database with real constraints and triggers.
+Use `--rules=rules.json` for explicit shared transformations and `--change-log`
+for a streaming audit of changed PKs.
+`--dry-run --suggest-rules` offers an interactive selection of rules, saves a new
+reviewed JSON file and revalidates it without loading data.
 
 **Find expensive ORM work in Symfony. Follow it from the Profiler to Grafana.**
 

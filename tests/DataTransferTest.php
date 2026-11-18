@@ -88,6 +88,14 @@ final class DataTransferTest extends TestCase
         $tester->execute(['--dry-run' => true, '--rehearsal' => true]);
     }
 
+    public function testNegativeChangeLimitFailsBeforeOpeningConnections(): void
+    {
+        $tester = new CommandTester(new TransferCommand(new Configuration()));
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('nonnegative max change examples');
+        $tester->execute(['--dry-run' => true, '--source-url-env' => 'SOURCE', '--target-url-env' => 'TARGET', '--max-change-examples' => '-1']);
+    }
+
     public function testRehearsalRequiresKnownApplicationDatabaseBeforeOpeningTarget(): void
     {
         $target = $this->createMock(Connection::class);
@@ -95,5 +103,21 @@ final class DataTransferTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('explicitly configured application database');
         (new RehearsalGuard())->checkDatabase($target, null);
+    }
+
+    public function testSuggestionsRejectNoninteractiveRunsBeforeConnecting(): void
+    {
+        $tester = new CommandTester(new TransferCommand(new Configuration()));
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('requires interactive --dry-run');
+        $tester->execute(['--dry-run' => true, '--suggest-rules' => true], ['interactive' => false]);
+    }
+
+    public function testSuggestionsCannotStartRehearsal(): void
+    {
+        $tester = new CommandTester(new TransferCommand(new Configuration()));
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('without --rehearsal');
+        $tester->execute(['--rehearsal' => true, '--suggest-rules' => true], ['interactive' => true]);
     }
 }

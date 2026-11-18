@@ -31,6 +31,7 @@ final class RehearsalIntegrationTest extends TestCase
         $targetName = 'modernorm_rehearsal_'.$suffix;
         $sourceCreated = $targetCreated = false;
         $target = null;
+        $artifacts = [];
         try {
             $source->executeStatement('CREATE DATABASE '.$sourceName);
             $sourceCreated = true;
@@ -132,6 +133,87 @@ final class RehearsalIntegrationTest extends TestCase
             $result = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
             self::assertStringContainsString('RLS-enabled', implode(' ', $result['errors']));
             $target->executeStatement('ALTER TABLE people DISABLE ROW LEVEL SECURITY');
+            $source->executeStatement("UPDATE people SET name=CONCAT(' ',name,' ')");
+            $source->executeStatement('UPDATE purchases SET flag=NULL, amount=-1');
+            $rulesFile = sys_get_temp_dir().'/modernorm_rules_'.bin2hex(random_bytes(6)).'.json';
+            $dryLog = $rulesFile.'.dry.jsonl';
+            $loadLog = $rulesFile.'.load.jsonl';
+            $failedLog = $rulesFile.'.failed.jsonl';
+            $artifacts = [$rulesFile, $dryLog, $loadLog, $failedLog];
+            $document = ['version' => 1, 'rules' => [
+                ['id' => 'trim_name', 'table' => 'people', 'column' => 'name', 'operation' => 'trim'],
+                ['id' => 'fill_flag', 'table' => 'purchases', 'column' => 'flag', 'operation' => 'null_to', 'value' => true],
+                ['id' => 'fix_amount', 'table' => 'purchases', 'column' => 'amount', 'operation' => 'replace', 'from' => '-1.00', 'to' => '12.34'],
+            ]];
+            file_put_contents($rulesFile, json_encode($document, JSON_THROW_ON_ERROR));
+            $dryOptions = array_replace($options, ['--rehearsal' => false, '--dry-run' => true, '--validate-data' => true, '--rules' => $rulesFile, '--max-change-examples' => '1', '--change-log' => $dryLog]);
+            self::assertSame(0, $tester->execute($dryOptions));
+            $dry = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+            $changes = $dry['validation']['transformations'];
+            self::assertSame(3, $changes['changed_rows']);
+            self::assertSame(4, $changes['changed_values']);
+            self::assertSame(4, $changes['rule_changes']);
+            self::assertSame(2, $changes['rules']['trim_name']['changes']);
+            self::assertCount(1, $changes['examples']);
+            self::assertTrue($changes['examples_truncated']);
+            self::assertSame(0, (int) $target->fetchOne('SELECT count(*) FROM people'));
+            self::assertSame(' Alice ', $source->fetchOne('SELECT name FROM people WHERE id=10'));
+            $ruleOptions = array_replace($options, ['--rules' => $rulesFile, '--max-change-examples' => '1', '--change-log' => $loadLog]);
+            self::assertSame(0, $tester->execute($ruleOptions));
+            $loaded = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+            self::assertSame('committed', $loaded['rehearsal']['status']);
+            self::assertSame($changes['rules_hash'], $loaded['rehearsal']['transformations']['rules_hash']);
+            self::assertSame(4, $loaded['rehearsal']['transformations']['changed_values']);
+            self::assertSame('Alice', $target->fetchOne('SELECT name FROM people WHERE id=10'));
+            self::assertSame('12.34', $target->fetchOne('SELECT amount FROM purchases'));
+            self::assertTrue((bool) $target->fetchOne('SELECT flag FROM purchases'));
+            self::assertSame('-1.00', $source->fetchOne('SELECT amount FROM purchases'));
+            $events = array_map(static fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR), file($loadLog, FILE_IGNORE_NEW_LINES));
+            self::assertCount(10, $events);
+            self::assertSame('committed', $events[9]['outcome']);
+            self::assertSame(4, count(array_filter($events, static fn (array $event): bool => ($event['phase'] ?? '') === 'validation')));
+            self::assertSame(4, count(array_filter($events, static fn (array $event): bool => ($event['phase'] ?? '') === 'load')));
+            $target->executeStatement('TRUNCATE people, purchases, auditlog RESTART IDENTITY CASCADE');
+            $source->executeStatement("UPDATE people SET name=' alice ' WHERE id=20");
+            self::assertSame(1, $tester->execute(array_replace($ruleOptions, ['--change-log' => $failedLog])));
+            $failed = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+            self::assertSame('23505', $failed['rehearsal']['sqlstate']);
+            self::assertFalse($failed['rehearsal']['target_data_committed']);
+            self::assertSame(0, (int) $target->fetchOne('SELECT count(*) FROM people'));
+            self::assertStringContainsString('"outcome":"failed"', file_get_contents($failedLog));
+            file_put_contents($rulesFile, json_encode(['version' => 1, 'rules' => [['id' => 'bad_fk', 'table' => 'purchases', 'column' => 'person_id', 'operation' => 'replace', 'from' => 10, 'to' => 20]]], JSON_THROW_ON_ERROR));
+            $noLogOptions = $ruleOptions;
+            unset($noLogOptions['--change-log']);
+            self::assertSame(1, $tester->execute($noLogOptions));
+            $failed = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+            self::assertStringContainsString('PK and FK columns cannot be transformed', implode(' ', $failed['errors']));
+            $source->executeStatement("UPDATE people SET name=' Bob ' WHERE id=20");
+            $source->executeStatement('UPDATE purchases SET amount=12.34');
+            $target->executeStatement('ALTER TABLE purchases ALTER COLUMN flag SET NOT NULL');
+            $proposed = $rulesFile.'.proposed.json';
+            $artifacts[] = $proposed;
+            $wizardOptions = array_replace($options, ['--rehearsal' => false, '--dry-run' => true, '--suggest-rules' => true, '--rules-output' => $proposed, '--format' => 'text', '--max-error-examples' => '0']);
+            $invalidProposed = $rulesFile.'.invalid-proposed.json';
+            $artifacts[] = $invalidProposed;
+            $tester->setInputs(['0', '1', '"not-a-bool"', 'yes']);
+            self::assertSame(1, $tester->execute(array_replace($wizardOptions, ['--rules-output' => $invalidProposed]), ['interactive' => true]));
+            self::assertFileExists($invalidProposed);
+            self::assertSame(0, (int) $target->fetchOne('SELECT count(*) FROM people'));
+            $tester->setInputs(['1', '1', 'false', 'yes']);
+            self::assertSame(0, $tester->execute($wizardOptions, ['interactive' => true]));
+            self::assertFileExists($proposed);
+            self::assertStringContainsString('Revalidating in the same read-only snapshot', $tester->getDisplay());
+            $chosen = json_decode(file_get_contents($proposed), true, flags: JSON_THROW_ON_ERROR);
+            self::assertCount(2, $chosen['rules']);
+            self::assertSame('trim', $chosen['rules'][0]['operation']);
+            self::assertSame('null_to', $chosen['rules'][1]['operation']);
+            self::assertFalse($chosen['rules'][1]['value']);
+            self::assertSame(0, (int) $target->fetchOne('SELECT count(*) FROM people'));
+            self::assertNull($source->fetchOne('SELECT flag FROM purchases'));
+            self::assertSame(' Alice ', $source->fetchOne('SELECT name FROM people WHERE id=10'));
+            self::assertSame(0, $tester->execute($options + ['--rules' => $proposed]));
+            self::assertSame('Alice', $target->fetchOne('SELECT name FROM people WHERE id=10'));
+            self::assertFalse((bool) $target->fetchOne('SELECT flag FROM purchases'));
             // A schema in the application DB is not an isolated rehearsal database.
             $_SERVER['MODERNORM_REHEARSAL_TARGET'] = $pgUrl;
             try {
@@ -151,6 +233,11 @@ final class RehearsalIntegrationTest extends TestCase
             }
             $source->close();
             $application->close();
+            foreach ($artifacts as $path) {
+                if (is_file($path)) {
+                    unlink($path);
+                }
+            }
         }
     }
 }

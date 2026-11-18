@@ -111,7 +111,7 @@ final class Planner
                     continue;
                 }
                 $check = (new TypeCompatibility())->compare($from->getColumn($columnName), $to->getColumn($columnName));
-                $columns[] = ['name' => $columnName, 'conversion' => $check['conversion']];
+                $columns[] = ['name' => $columnName, 'conversion' => $check['conversion'], 'source_type' => $from->getColumn($columnName)->getTypeName(), 'target_type' => $to->getColumn($columnName)->getTypeName()];
                 if ($check['error'] !== null) {
                     $errors[] = $name.'.'.$columnName.': '.$check['error'];
                 }
@@ -137,7 +137,7 @@ final class Planner
             }
             $sequence = count($targetKey) === 1 ? $target->fetchOne('SELECT pg_catalog.pg_get_serial_sequence(?, ?)', [$destination, $targetKey[0]]) : null;
             $effectiveBatchSize = min($batchSize, max(1, intdiv(65535, max(1, count($columns)))));
-            $tables[$name] = ['source' => $database.'.'.$name, 'target' => $destination, 'entity' => $class->name, 'primary_key' => $sourceKey, 'columns' => $columns, 'batch_size' => $effectiveBatchSize, 'sequence_after_load' => $sequence ?: null];
+            $tables[$name] = ['source' => $database.'.'.$name, 'target' => $destination, 'entity' => $class->name, 'primary_key' => $sourceKey, 'protected_columns' => $sourceKey, 'columns' => $columns, 'batch_size' => $effectiveBatchSize, 'sequence_after_load' => $sequence ?: null];
         }
         foreach ($tables as $name => $table) {
             $class = $mapped[$name];
@@ -151,6 +151,12 @@ final class Planner
                     continue;
                 }
                 $dependencies[$name][] = $destinations[$qualified];
+                foreach ($fk->getReferencingColumnNames() as $column) {
+                    $tables[$name]['protected_columns'][] = $column->getIdentifier()->getValue();
+                }
+                foreach ($fk->getReferencedColumnNames() as $column) {
+                    $tables[$destinations[$qualified]]['protected_columns'][] = $column->getIdentifier()->getValue();
+                }
             }
             foreach ($snapshot['tables'][$name]->getForeignKeys() as $fk) {
                 $parent = $fk->getReferencedTableName();
@@ -160,6 +166,12 @@ final class Planner
                     continue;
                 }
                 $dependencies[$name][] = $parentName;
+                foreach ($fk->getReferencingColumnNames() as $column) {
+                    $tables[$name]['protected_columns'][] = $column->getIdentifier()->getValue();
+                }
+                foreach ($fk->getReferencedColumnNames() as $column) {
+                    $tables[$parentName]['protected_columns'][] = $column->getIdentifier()->getValue();
+                }
             }
         }
         $sorted = (new DependencyOrder())->sort($dependencies);

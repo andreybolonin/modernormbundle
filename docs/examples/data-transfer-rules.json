@@ -1,0 +1,8 @@
+{
+    "version": 1,
+    "rules": [
+        {"id": "trim_email", "table": "users", "column": "email", "operation": "trim"},
+        {"id": "zero_created_at", "table": "users", "column": "created_at", "operation": "replace", "from": "0000-00-00 00:00:00", "to": null},
+        {"id": "default_amount", "table": "orders", "column": "amount", "operation": "null_to", "value": "0.00"}
+    ]
+}
