@@ -2,19 +2,15 @@
 
 ## Unreleased
 
-- Add interactive `modernorm:data:transfer --dry-run --suggest-rules`: aggregate full-scan evidence, offer explicit trim/zero-date/required-NULL choices, preserve existing rules in a new reviewed JSON file and revalidate without loading data. Noninteractive runs, overwrites and rehearsal combinations are rejected.
+## 0.1.0-beta.6 — 2026-11-18
 
-- Add versioned JSON transformation rules (`trim`, `replace`, `null_to`) shared by validation and rehearsal loading, with PK/FK protection, per-rule counters, bounded examples and an optional complete JSONL change journal. Values remain subject to target validation and constraints.
-
-- Add `modernorm:data:transfer --rehearsal`: validate and load an explicitly separate PostgreSQL database with real constraints/triggers, atomic row loading, ID preservation, count/PK verification and owned-sequence resets. Reuse batch reading and scalar conversion with dry-run validation; application database loading remains blocked.
-
-- Add `modernorm:data:transfer --dry-run --validate-data`: scan all InnoDB source rows using bounded keyset batches, validate PostgreSQL type input and lossy conversions without inserts, and report exact counts with bounded PK/column error examples. UNIQUE/FK/CHECK constraints and triggers remain outside validation.
-
-- Add read-only `modernorm:data:transfer --dry-run` planning for MySQL → PostgreSQL using mapped entities, with source coverage, empty-target/type/PK checks, FK ordering, sequence plans, JSON reports and explicit value-validation limits. Data loading is not implemented.
-
-- Support MySQL schema sources in `modernorm:mapping:import` via `--source-url-env`, with AUTO_INCREMENT, unsigned types, ENUM/SET, platform-aware indexes, explicit manual-review warnings and MySQL 8.4 CI coverage. Application persistence remains PostgreSQL-only.
-
-- Add `modernorm:mapping:import` to generate new attribute entities from existing PostgreSQL tables, with schema/table selection, dry-run, simple owning associations, identity/serial IDs and explicit unsupported-mapping reports.
+- Generate new attribute entities from PostgreSQL or MySQL 8.4 with `modernorm:mapping:import`, including separate source URLs, dry-run, identity/serial IDs, simple associations and explicit unsupported-feature reports.
+- Plan MySQL → PostgreSQL transfers with `modernorm:data:transfer --dry-run`; check mapping coverage, target emptiness, types, PKs and FK ordering without writing data.
+- Scan all source rows with `--validate-data`, using bounded keyset batches, PostgreSQL type-input validation, exact error counts and bounded PK/column examples.
+- Rehearse real loading in a separate PostgreSQL database with `--rehearsal`: preserve IDs, exercise constraints/triggers, verify row counts and PKs, and reset owned sequences. Application-database loading remains blocked.
+- Share versioned JSON rules (`trim`, `replace`, `null_to`) between validation and loading, with protected PK/FK columns, per-rule counters and optional complete JSONL change journals.
+- Offer interactive choices through `--dry-run --suggest-rules`, save a new reviewed rules file and revalidate in read-only snapshots. Existing files are never overwritten and rehearsal is a separate explicit operation.
+- Add MySQL 8.4 integration coverage to CI. Keep ORM core requirement at `^0.1.0-beta.5`; MySQL is an import source, while application persistence remains PostgreSQL-only.
 
 ## 0.1.0-beta.5 — 2026-11-17
 

@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      COMPOSER_ROOT_VERSION: 0.1.0-beta.5
+      COMPOSER_ROOT_VERSION: 0.1.0-beta.6
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,7 +45,7 @@ jobs:
         php: ['8.4', '8.5']
         symfony: ['locked', '7.4', '8.1']
     env:
-      COMPOSER_ROOT_VERSION: 0.1.0-beta.5
+      COMPOSER_ROOT_VERSION: 0.1.0-beta.6
       MODERNORM_TEST_URL: postgresql://postgres:postgres@127.0.0.1:5432/modernorm_test
       MODERNORM_TEST_MYSQL_URL: mysql://root:modernorm@127.0.0.1:3306/mysql
     services:
@@ -132,7 +132,7 @@ jobs:
         php: ['8.4', '8.5']
         postgresql: ['17', '18', '19rc1']
     env:
-      COMPOSER_ROOT_VERSION: 0.1.0-beta.5
+      COMPOSER_ROOT_VERSION: 0.1.0-beta.6
       MODERNORM_TEST_URL: postgresql://postgres:postgres@127.0.0.1:5432/modernorm_test
       MODERNORM_TEST_MYSQL_URL: mysql://root:modernorm@127.0.0.1:3306/mysql
       MODERNORM_CORE_PATH: ${{ github.workspace }}/modernorm-core

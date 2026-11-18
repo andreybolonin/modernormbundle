@@ -1,16 +1,17 @@
 # Contributing
 
-Use PHP 8.4/8.5, Symfony 7.4/8.1 and PostgreSQL 17. Install dependencies with Composer; the published core package is resolved without a sibling checkout.
+Use PHP 8.4/8.5, Symfony 7.4/8.1, PostgreSQL 17+ and MySQL 8.4. Install dependencies with Composer; the published core package is resolved without a sibling checkout.
 
 ```sh
 composer install
 composer install --working-dir=examples/observability
 composer quality
-MODERNORM_TEST_URL='postgresql://user:password@127.0.0.1/modernorm_test' composer test -- --fail-on-skipped
+MODERNORM_TEST_URL='postgresql://user:password@127.0.0.1/modernorm_test' \
+MODERNORM_TEST_MYSQL_URL='mysql://user:password@127.0.0.1/mysql' composer test -- --fail-on-skipped
 composer validate --strict
 ```
 
-Use a dedicated test database. Tests create temporary tables and random schemas. CI also runs the migration/fixture example and a runtime smoke after install --no-dev.
+Use a dedicated test database. Tests create temporary tables, random schemas and disposable databases. The PostgreSQL test role needs CREATEDB and the MySQL test user needs CREATE/DROP DATABASE for import/rehearsal tests. CI also runs the migration/fixture example and a runtime smoke after install --no-dev.
 
 Provide focused regression coverage for behavior changes. Preserve separation between the ORM core and Symfony adapters, optional dependencies, bounded profiler history and worker reset. Describe transaction/cache outcomes for migration/fixture changes and preserve constructor-injected fixture dependencies.
 

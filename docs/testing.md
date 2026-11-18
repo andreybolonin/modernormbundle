@@ -6,15 +6,16 @@ For bundle development, clone this repository and run `composer install`. The co
 
 ## Test matrix
 
-GitHub Actions runs PHP 8.4/8.5 against locked dependencies and Symfony 7.4/8.1 with PostgreSQL 17. The core is installed from Packagist through Composer. Integration tests fail if skipped, the migration/fixture example runs, and a final smoke test boots the bundle after `composer install --no-dev`, without Twig, WebProfiler, Doctrine ORM or the optional migration/fixture libraries.
+GitHub Actions runs PHP 8.4/8.5 against locked dependencies and Symfony 7.4/8.1 with PostgreSQL 17 and MySQL 8.4. The core is installed from Packagist through Composer. Integration tests fail if skipped, the migration/fixture example runs, and a final smoke test boots the bundle after `composer install --no-dev`, without Twig, WebProfiler, Doctrine ORM or the optional migration/fixture libraries.
 
 Run `composer test` for functional kernel, persisted profile, Twig rendering, console, subrequest, observer and worker-reset checks. To include PostgreSQL connection and transaction cleanup checks:
 
 ```sh
-MODERNORM_TEST_URL='postgresql://user:password@127.0.0.1/modernorm_test' composer test
+MODERNORM_TEST_URL='postgresql://user:password@127.0.0.1/modernorm_test' \
+MODERNORM_TEST_MYSQL_URL='mysql://user:password@127.0.0.1/mysql' composer test -- --fail-on-skipped
 ```
 
-PostgreSQL tests execute real ORM INSERT/UPDATE/DELETE, association loading for all three batch kinds, entity L2 miss/put/hit and UPDATE invalidation, and a failed flush followed by Messenger reset. They use connection-local temporary tables and isolated random schemas in the designated test database. Existing application tables are not changed.
+PostgreSQL tests execute real ORM INSERT/UPDATE/DELETE, association loading for all three batch kinds, entity L2 miss/put/hit and UPDATE invalidation, and a failed flush followed by Messenger reset. They use connection-local temporary tables and isolated random schemas in the designated test database. Rehearsal tests additionally create/drop isolated PostgreSQL and MySQL databases, so test users need PostgreSQL CREATEDB and MySQL CREATE/DROP DATABASE privileges. Existing application tables are not changed.
 
 Functional tests boot a standalone Symfony kernel and verify persisted profiles, rendered panels and worker reset. The [migration/fixture example](../examples/migrations-fixtures/README.md) exercises an empty PostgreSQL schema end to end.
 

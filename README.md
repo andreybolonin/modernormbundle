@@ -40,7 +40,7 @@ The monitoring stack is opt-in and ships as a runnable prototype. [Explore the P
 Requires **PHP 8.4+, PostgreSQL and Symfony 7.4 or 8.x**. Add TwigBundle and WebProfilerBundle for the optional debug UI.
 
 ```sh
-composer require 'andreybolonin/modernorm:^0.1.0-beta.5' 'andreybolonin/modernorm-bundle:^0.1.0-beta.5'
+composer require 'andreybolonin/modernorm:^0.1.0-beta.5' 'andreybolonin/modernorm-bundle:^0.1.0-beta.6'
 ```
 
 Register the bundle in `config/bundles.php`:
