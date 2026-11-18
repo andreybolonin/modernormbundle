@@ -55,6 +55,9 @@ final class ModernORMExtension extends Extension
             ->setArguments([$config['url'], $config['server_version'], $ref('modernorm.statistics'), $ref('modernorm.profiler.sql_history')]);
         // A named argument alias lets DoctrineBundle coexist without taking its default DBAL alias.
         $container->registerAliasForArgument('modernorm.connection', Connection::class, 'modernormConnection');
+        $container->register('modernorm.command.mapping.import', \ModernORM\Bundle\ReverseEngineering\ImportCommand::class)
+            ->setArguments([$ref('modernorm.connection'), $container->getParameter('kernel.project_dir')])
+            ->addTag('console.command', ['command' => 'modernorm:mapping:import']);
         $container->register('modernorm.event_manager', EventManager::class);
         $container->register('modernorm.configuration', ORMConfiguration::class)->setFactory([EntityManagerFactory::class, 'configuration'])
             ->setArguments([$config['mapping_paths'], $config['batch_size'], $ref($config['metadata_cache_pool']), $ref($config['query_cache_pool']), $config['l2_cache']['pool'] === null ? null : $ref($config['l2_cache']['pool']), $config['l2_cache']['namespace'], $ref('modernorm.cache_logger_dispatcher')]);

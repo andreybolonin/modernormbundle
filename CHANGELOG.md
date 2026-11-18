@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `modernorm:mapping:import` to generate new attribute entities from existing PostgreSQL tables, with schema/table selection, dry-run, simple owning associations, identity/serial IDs and explicit unsupported-mapping reports.
+
 ## 0.1.0-beta.5 — 2026-11-17
 
 - Require core beta.5 and advance the compatibility pin to `15db53058e10fa1fcd3ad7464c7531cb2a131600`, including scalar dirty checking, hydration/UoW extraction and flush/COMMIT contract regressions.

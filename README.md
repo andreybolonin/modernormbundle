@@ -1,5 +1,8 @@
 # ModernORMBundle
 
+Generate entities from an existing PostgreSQL database with
+[`modernorm:mapping:import`](docs/reverse-engineering.md), including a dry-run preview.
+
 **Find expensive ORM work in Symfony. Follow it from the Profiler to Grafana.**
 
 ModernORMBundle brings [ModernORM](https://github.com/andreybolonin/modernorm), the PostgreSQL-first ORM for PHP 8.4+, into Symfony with a Performance Advisor, request-level diagnostics and OpenTelemetry metrics.
