@@ -79,6 +79,19 @@ final class SchemaInspector
                 }
             }
             $generated = $target->fetchAllAssociative('SELECT column_name, is_generated, is_identity, column_default, identity_generation, identity_start, identity_increment, identity_minimum, identity_maximum, identity_cycle, collation_name FROM information_schema.columns WHERE table_schema=? AND table_name=? ORDER BY ordinal_position', [$schema, $name]);
+            $attributes = $target->fetchAllAssociative('SELECT a.attname, t.typname AS type_name, n.nspname AS type_schema, pg_catalog.pg_get_expr(d.adbin,d.adrelid) AS default_sql, pg_catalog.format_type(a.atttypid,a.atttypmod) AS sql_type FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_type t ON t.oid=a.atttypid JOIN pg_catalog.pg_namespace n ON n.oid=t.typnamespace LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum WHERE a.attrelid=CAST(? AS regclass) AND a.attnum>0 AND NOT a.attisdropped', [$qualified]);
+            $attributes = array_column($attributes, null, 'attname');
+            $projections = [];
+            foreach ($generated as $column) {
+                $columnName = $column['column_name'];
+                if (!$from->hasColumn($columnName) && $column['is_generated'] === 'NEVER' && $column['is_identity'] === 'NO') {
+                    try {
+                        $projections[$columnName] = ['projection' => (new TargetProjections())->describe($target, $description['columns'][$columnName], array_replace($description['definitions'][$columnName], ['sql_type' => $attributes[$columnName]['sql_type']]), array_replace($column, $attributes[$columnName], ['column_default' => $attributes[$columnName]['default_sql']])), 'error' => null];
+                    } catch (\InvalidArgumentException $error) {
+                        $projections[$columnName] = ['projection' => null, 'error' => $error->getMessage()];
+                    }
+                }
+            }
             $sequences = [];
             foreach ($to->getColumns() as $column) {
                 $columnName = $column->getObjectName()->getIdentifier()->getValue();
@@ -87,7 +100,7 @@ final class SchemaInspector
                     $sequences[$columnName] = ['name' => $sequence, 'settings' => $target->fetchAssociative('SELECT seqtypid::regtype::text AS type, seqstart::text, seqincrement::text, seqmin::text, seqmax::text, seqcycle FROM pg_catalog.pg_sequence WHERE seqrelid=CAST(? AS regclass)', [$sequence])];
                 }
             }
-            $tables[$name] = ['source_table' => $from, 'target_table' => $to, 'source_catalog' => $sourceColumns, 'target_catalog' => $generated, 'definitions' => $description['definitions'], 'sequences' => $sequences, 'source' => $database.'.'.$name, 'target' => $qualified, 'schema' => $schema, 'source_structure' => $this->describe($from), 'target_structure' => $this->describe($to), 'constraints' => $constraints, 'index_catalog' => $indexes, 'rewrite_rules' => $rules, 'triggers' => $triggers, 'relation' => $relation];
+            $tables[$name] = ['projection_candidates' => $projections, 'source_table' => $from, 'target_table' => $to, 'source_catalog' => $sourceColumns, 'target_catalog' => $generated, 'definitions' => $description['definitions'], 'sequences' => $sequences, 'source' => $database.'.'.$name, 'target' => $qualified, 'schema' => $schema, 'source_structure' => $this->describe($from), 'target_structure' => $this->describe($to), 'constraints' => $constraints, 'index_catalog' => $indexes, 'rewrite_rules' => $rules, 'triggers' => $triggers, 'relation' => $relation];
         }
         $sourceIdentity = ['instance' => (string) $source->fetchOne('SELECT @@server_uuid'), 'database' => $database];
         $targetIdentity = ['instance' => (string) $target->fetchOne('SELECT system_identifier::text FROM pg_catalog.pg_control_system()'), 'database' => (string) $target->fetchOne('SELECT current_database()'), 'oid' => (string) $target->fetchOne('SELECT oid::text FROM pg_catalog.pg_database WHERE datname=current_database()')];
@@ -106,7 +119,7 @@ final class SchemaInspector
             $indexes[$index->getObjectName()->toString()] = ['columns' => array_map(static fn ($column): string => $column->getColumnName()->getIdentifier()->getValue(), $index->getIndexedColumns()), 'unique' => $index->getType() === IndexType::UNIQUE, 'type' => $index->getType()->name, 'clustered' => $index->isClustered(), 'predicate' => $index->getPredicate(), 'lengths' => array_map(static fn ($column): ?int => $column->getLength(), $index->getIndexedColumns())];
         }
         foreach ($table->getForeignKeys() as $fk) {
-            $foreignKeys[$fk->getObjectName()?->toString() ?? 'unnamed'] = ['columns' => array_map(static fn ($column): string => $column->getIdentifier()->getValue(), $fk->getReferencingColumnNames()), 'parent' => $fk->getReferencedTableName()->getUnqualifiedName()->getValue(), 'parent_schema' => $fk->getReferencedTableName()->getQualifier()?->getValue(), 'referenced_columns' => array_map(static fn ($column): string => $column->getIdentifier()->getValue(), $fk->getReferencedColumnNames()), 'on_update' => $fk->getOnUpdateAction()->value, 'on_delete' => $fk->getOnDeleteAction()->value];
+            $foreignKeys[$fk->getObjectName()?->toString() ?? 'unnamed'] = ['columns' => array_map(static fn ($column): string => $column->getIdentifier()->getValue(), $fk->getReferencingColumnNames()), 'parent' => $fk->getReferencedTableName()->getUnqualifiedName()->getValue(), 'parent_schema' => $fk->getReferencedTableName()->getQualifier()?->getValue(), 'referenced_columns' => array_map(static fn ($column): string => $column->getIdentifier()->getValue(), $fk->getReferencedColumnNames()), 'match' => $fk->getMatchType()->value, 'on_update' => $fk->getOnUpdateAction()->value, 'on_delete' => $fk->getOnDeleteAction()->value];
         }
         ksort($indexes);
         ksort($foreignKeys);

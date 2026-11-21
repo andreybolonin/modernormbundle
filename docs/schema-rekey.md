@@ -23,8 +23,9 @@ For each composite entity PK, the target needs:
   INCREMENT 1 and NO CYCLE.
 - All original columns, including NOT NULL source PK columns and a UNIQUE on the
   full original PK in its original order.
-- A new NOT NULL BIGINT FK for each reference to a transformed parent; original
-  FK columns remain present. Target FK actions are captured in the reviewed plan.
+- A new BIGINT FK for each reference to a transformed parent; original FK columns
+  remain present. The new FK must be nullable if any source FK component is
+  nullable, and NOT NULL otherwise. Target FK actions are captured in the reviewed plan.
 
 The planner infers mappings from the two physical schemas without entity metadata.
 Each source FK must have exactly one matching target FK to the same parent. An
@@ -168,19 +169,166 @@ Sequences may advance despite rollback. Once the fence is released, the operator
 must keep source writes stopped through manual cutover. The command neither
 maintains that fence after exit nor performs CDC or a final catch-up sync.
 
+## Additional target columns
+
+A target-only payload column can be nullable without a default, or have a literal
+constant default. Prepare these columns in PostgreSQL as usual:
+
+```sql
+ALTER TABLE balances
+    ADD migration_note TEXT NULL,
+    ADD status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    ADD retries BIGINT NOT NULL DEFAULT 0,
+    ADD settings JSONB DEFAULT '{}'::jsonb;
+```
+
+`migration_note` receives NULL; the other columns receive their checked constants
+for every copied row. A nullable column with a non-NULL constant default uses the
+default, not NULL. Original source columns continue to use copied/transformed
+source values even if their target columns also have defaults.
+
+The plan records target-only values explicitly, for example:
+
+```yaml
+target_projections:
+  migration_note:
+    operation: "null"
+    target_type: "text"
+    encoding: "text"
+    value: null
+  status:
+    operation: "constant"
+    target_type: "string"
+    encoding: "text"
+    value: "pending"
+  retries:
+    operation: "constant"
+    target_type: "bigint"
+    encoding: "text"
+    value: "0"
+```
+
+Constants are recognized from PostgreSQL's deparsed default: one literal with an
+optional built-in cast. Integer/decimal values stay exact strings; boolean,
+text, bytea, JSON/JSONB, UUID and absolute date/time constants are supported for
+compatible built-in target types. Binary values are stored as base64 in the plan.
+Temporal special/relative inputs such as `now`, `today` or `infinity` are rejected.
+
+No default function or arbitrary expression is evaluated. `now()`, `nextval()`,
+UUID functions, arithmetic, concatenation, subqueries and custom-type casts are
+blocked for target-only columns. Generated columns and extra identity columns
+outside the planned PK remain unsupported. Required columns without a non-NULL
+constant, incompatible types and implicit lossy casts block planning, even for
+empty source tables. Explicit literal casts use their declared PostgreSQL value.
+
+Staging does not inherit target defaults. Instead it receives explicit typed
+NULL/constant values and final INSERT copies those values. Validation independently
+checks each projection against the plan, then compares every final field against
+staging. Corrupting both copies does not bypass the constant check. UNIQUE/CHECK/FK
+constraints still run and can reject a constant for the actual rows; such failures
+roll back table writes. A default change invalidates a saved plan.
+
+Rules and suggestions continue to address source-backed fields only; a rule on a
+target-only column is rejected. Projection filling is schema-driven and does not
+produce transformation-rule journal events. Rekey protects keys and validates new
+relationships as before; extra target-only FKs are not implicitly inferred.
+Previously saved plans must be regenerated after this plan-format extension.
+
+## Nullable composite foreign keys
+
+Optional composite FK relationships between different tables use the same
+MATCH SIMPLE policy as self-references. If **any** source component is NULL,
+the new scalar FK is NULL. This includes an all-NULL FK, one populated component
+plus NULL, and a non-null tenant component plus a nullable object component.
+The original components remain unchanged, even when a populated component alone
+does not identify an existing parent.
+
+Prepare a nullable BIGINT target FK if any component in the source relationship
+is nullable. A required relationship still needs a NOT NULL target FK. For example:
+
+```text
+Source: reservations(warehouse_id NULL, product_id NULL)
+        → balances PK(warehouse_id, product_id)
+Target: reservations.balance_id BIGINT NULL → balances.id
+```
+
+A fully populated tuple, including zero-valued components, must resolve to
+exactly one parent; orphan references fail remap and roll back the transfer.
+There is no fallback that turns an unresolved populated FK into NULL. The plan
+records `nullable`, `null_policy: any_null_absent` and the source MATCH mode.
+Parents still load before children. Source key/FK components remain protected
+from transformation rules; normal payload rules and journals work as before.
+
+Final validation checks absent relationships, missing relationships and wrong
+existing parent IDs independently of staging/final agreement. Cross-table cycles,
+references to alternate UNIQUE keys and rekey chains through a child identifier
+or a referenced child key remain blocked.
+
+## Self-references
+
+Rekey supports declared self-references to the complete source PK. IDs for every
+row are allocated in staging before any links are remapped; each final table is
+inserted with one `INSERT ... SELECT`. Parents can occur after children in source
+PK order even when `--batch-size=1`, and target FKs need not be deferrable. Cycles
+between different tables are still blocked. Existing self-parent links and cycles
+between rows of the same table are preserved; the command does not validate
+application-specific tree invariants.
+
+For a composite entity key, a common supported source shape is:
+
+```sql
+CREATE TABLE categories (
+    tenant_id BIGINT NOT NULL,
+    category_code BIGINT NOT NULL,
+    parent_code BIGINT NULL,
+    PRIMARY KEY (tenant_id, category_code),
+    FOREIGN KEY (tenant_id, parent_code)
+        REFERENCES categories (tenant_id, category_code)
+);
+```
+
+Prepare the target with a new PK and a nullable scalar parent FK:
+
+```sql
+CREATE TABLE categories (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    category_code BIGINT NOT NULL,
+    parent_code BIGINT NULL,
+    parent_id BIGINT NULL REFERENCES categories(id),
+    UNIQUE (tenant_id, category_code)
+);
+```
+
+Self-references use the source's MATCH SIMPLE semantics: **any NULL component**
+means no relationship, including a populated tenant ID plus NULL parent code.
+The new parent ID is NULL; retained source FK columns are not cleared or changed.
+See [MySQL's documented FK semantics](https://dev.mysql.com/doc/refman/8.4/en/create-table.html).
+A fully populated FK must resolve to exactly one original parent key, or the
+operation fails and rolls back; it never falls back to NULL for an orphan.
+
+The plan records `self_reference`, `nullable`, `null_policy` (`any_null_absent` or
+`required`) and source/target MATCH modes. Final verification independently checks
+that absent relationships stayed NULL and populated relationships point to the
+correct mapped parent. Single-PK self-references can also be preserved without
+rekeying their IDs. Incoming join-table references and ambiguous mappings to
+multiple new FK columns remain unsupported. Regenerate previously saved plans after this structural change.
+
 ## MVP limits
 
 - MySQL source and PostgreSQL target; source tables must be InnoDB. Type-input
   validation requires PostgreSQL 17+.
-- Transformed PK and remapped FK components must be non-null integers. Unsigned
+- Transformed PK components must be non-null integers; remapped FK components
+  must be integers. Nullable references use MATCH SIMPLE semantics. Unsigned
   source keys may use explicit NUMERIC(...,0) target columns to retain their full
   range; the new ID always stays signed BIGINT.
 - Every source table/column is covered; no skip, rename or partial transfer.
-- References outside the source DB, alternate referenced UNIQUE keys, nullable
-  composite FKs, self-references/cycles, incoming join-table references and rekey
-  chains through child identifiers/referenced keys are blocked globally.
-- Additional target columns are limited to planned new IDs/FKs. Extra default or
-  generated projections, RLS, inheritance/partitioning, user triggers, rewrite
+- References outside the source DB, alternate referenced UNIQUE keys, cross-table
+  cycles, incoming join-table references and rekey chains through child
+  identifiers/referenced keys are blocked globally.
+- Additional target columns require planned IDs/FKs, NULL or supported constant
+  projections. Generated columns, executable defaults, custom target-only types,
+  RLS, inheritance/partitioning, user triggers, rewrite
   rules and invalid indexes/constraints are blocked.
 - No schema DDL generation/application, UUID allocator, cleanup of original
   columns, application mapping/code rewrite or automatic cutover.

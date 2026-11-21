@@ -17,7 +17,10 @@ final class DependencyGraph
                 $blockers[] = $edge['child'].'.'.$edge['name'].': blocked FK edge to '.$edge['parent'].': '.$edge['reason'];
                 continue;
             }
-            $dependencies[$edge['child']][] = $edge['parent'];
+            // Staging resolves self-edges before the table's single final INSERT.
+            if ($edge['child'] !== $edge['parent']) {
+                $dependencies[$edge['child']][] = $edge['parent'];
+            }
         }
         $sorted = (new DependencyOrder())->sort($dependencies);
         if ($sorted['blocked'] !== []) {

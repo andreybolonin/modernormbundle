@@ -83,6 +83,7 @@ final class RekeyValidator
         $quote = $target->getDatabasePlatform()->quoteSingleIdentifier(...);
         foreach ($plan['tables'] as $name => $table) {
             $stage = $stages[$name];
+            (new TargetProjections())->verify($target, $table, $stage);
             $keyParts = [];
             foreach ($table['target_key'] as $key) {
                 $keyParts[] = 's.'.$quote($key).' = f.'.$quote($key);
@@ -122,7 +123,12 @@ final class RekeyValidator
                 $join = (new ForeignKeyRemapper())->join($target, $edge, 'c', 'p');
                 $expectedId = 'p.'.$quote($parent['target_key'][0]);
                 $actualId = 'c.'.$quote($edge['target_columns'][0]);
-                $mismatch = (int) $target->fetchOne('SELECT count(*) FROM '.$child['target'].' c LEFT JOIN '.$parent['target'].' p ON '.$join.' WHERE '.$expectedId.' IS NULL OR '.$actualId.' IS DISTINCT FROM '.$expectedId);
+                $present = (new ForeignKeyRemapper())->present($target, $edge, 'c');
+                $invalid = $expectedId.' IS NULL OR '.$actualId.' IS DISTINCT FROM '.$expectedId;
+                if ($edge['null_policy'] === 'any_null_absent') {
+                    $invalid = '(('.$present.') AND ('.$invalid.')) OR (NOT ('.$present.') AND '.$actualId.' IS NOT NULL)';
+                }
+                $mismatch = (int) $target->fetchOne('SELECT count(*) FROM '.$child['target'].' c LEFT JOIN '.$parent['target'].' p ON '.$join.' WHERE '.$invalid);
                 if ($mismatch !== 0) {
                     throw new \RuntimeException($edge['child'].'.'.$edge['name'].': final FK points to a wrong source parent.');
                 }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Support target-only nullable columns and literal constant defaults in `--schema-rekey`. Plan explicit typed projections, populate staging without inheriting defaults and independently verify constants before commit. Reject executable defaults/generated columns and incompatible values, preserve scalar rules on source-backed fields, and invalidate saved plans when defaults change.
+
+- Support nullable composite FKs between tables in `--schema-rekey`: MATCH SIMPLE NULL handling, matching target FK nullability, exact parent remapping and independent final verification. Preserve original FK components, shared payload rules/journals, and fail on populated orphan keys; cross-table cycles and rekey chains remain blocked.
+
+- Support full-PK self-references in `--schema-rekey`, including nullable MATCH SIMPLE roots and shared tenant/PK columns. Resolve links through complete staging before a single-table INSERT; verify NULL, exact parent mapping and orphan rollback. Cross-table cycles remain blocked.
+
 - Add `modernorm:data:transfer --schema-rekey`: independent physical-schema planning, optional strict saved YAML plans, transactional raw/typed staging, BIGINT surrogate IDs, FK/ManyToMany remapping, full source/value/edge verification and sequence synchronization. Share the existing rules, interactive suggestions and JSONL audit engine, bind rules hashes to plans and protect all key columns. Write modes require an offline MySQL global read fence and a prepared empty PostgreSQL target; ordinary transfer behavior is unchanged.
 
 - Print an upfront `--execute` warning before opening database connections: stop MySQL writes and target traffic, account for snapshot limits and require empty target tables. Keep JSON stdout clean by using stderr.

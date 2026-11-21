@@ -64,6 +64,7 @@ final class StagingManager
                 $columns = array_merge(array_column($table['columns'], 'name'), [$stage['raw'], $stage['ordinal']]);
                 $target->executeStatement('INSERT INTO '.$stage['table'].' ('.implode(', ', array_map($quote, $columns)).') VALUES '.implode(', ', $tuples), $parameters, $types);
             }
+            (new TargetProjections())->populate($target, $table, $stage);
             $stages[$name] = $stage;
         }
 

@@ -9,6 +9,7 @@ use ModernORM\Bundle\DataTransfer\TransformationRules;
 use ModernORM\Bundle\SchemaRekey\DependencyGraph;
 use ModernORM\Bundle\SchemaRekey\RekeyPlan;
 use ModernORM\Bundle\SchemaRekey\RekeyRules;
+use ModernORM\Bundle\SchemaRekey\TargetProjections;
 use ModernORM\Configuration;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -43,8 +44,23 @@ final class SchemaRekeyTest extends TestCase
         $edge = ['child' => 'links', 'parent' => 'parents', 'name' => 'fk', 'classification' => 'remap', 'reason' => null];
         self::assertSame(['parents', 'links'], $graph->order(['links' => [], 'parents' => []], [$edge])['order']);
         $edge['classification'] = 'blocked';
-        $edge['reason'] = 'unsupported nullable composite key';
-        self::assertStringContainsString('unsupported nullable', implode(' ', $graph->order(['links' => [], 'parents' => []], [$edge])['blockers']));
+        $edge['reason'] = 'unsupported alternate unique key';
+        self::assertStringContainsString('unsupported alternate unique', implode(' ', $graph->order(['links' => [], 'parents' => []], [$edge])['blockers']));
+    }
+
+    public function testSelfEdgesDoNotBlockTableOrderButCrossTableCyclesStillDo(): void
+    {
+        $graph = new DependencyGraph();
+        $self = ['child' => 'categories', 'parent' => 'categories', 'name' => 'parent_fk', 'classification' => 'remap', 'reason' => null];
+        $child = ['child' => 'items', 'parent' => 'categories', 'name' => 'category_fk', 'classification' => 'remap', 'reason' => null];
+        $result = $graph->order(['items' => [], 'categories' => []], [$self, $child]);
+        self::assertSame([], $result['blockers']);
+        self::assertSame(['categories', 'items'], $result['order']);
+        $back = ['child' => 'categories', 'parent' => 'items', 'name' => 'item_fk', 'classification' => 'preserve', 'reason' => null];
+        self::assertNotEmpty($graph->order(['items' => [], 'categories' => []], [$self, $child, $back])['blockers']);
+        $self['classification'] = 'blocked';
+        $self['reason'] = 'unsupported source key';
+        self::assertNotEmpty($graph->order(['categories' => []], [$self])['blockers']);
     }
 
     public function testRulesProtectSourceAndTargetKeysAndAllBusinessUniqueColumns(): void
@@ -62,6 +78,22 @@ final class SchemaRekeyTest extends TestCase
         self::assertSame([], RekeyRules::bind($plan, $rules)['blockers']);
         $plan['tables']['items']['target_structure']['indexes'][] = ['unique' => true, 'columns' => ['lower(name)']];
         self::assertNotEmpty(RekeyRules::bind($plan, $rules)['blockers']);
+    }
+
+    #[DataProvider('constantDefaults')]
+    public function testConstantDefaultRecognitionExcludesExecutableExpressions(string $sql, bool $supported): void
+    {
+        self::assertSame($supported, TargetProjections::literalExpression($sql) !== null);
+    }
+
+    public static function constantDefaults(): iterable
+    {
+        foreach (["0", "-7", "1.25", "1e-3", "false", "NULL", "'it''s ready'::text", "'now()'::text", "'pending'::character varying", "'1.2500'::numeric(10,4)", "'2020-01-01 12:00:00+00'::timestamp(3) with time zone", "E'line\\nnext'::text", "('ready'::pg_catalog.text)"] as $sql) {
+            yield $sql => [$sql, true];
+        }
+        foreach (["now()", "nextval('seq')", "1+2", "(SELECT 1)", "CASE WHEN true THEN 1 ELSE 2 END", "CURRENT_TIMESTAMP", "'x'||'y'", "'1'::public.custom_type", "'1'::int::text", "'x'; SELECT 1", "ARRAY[1,2]"] as $sql) {
+            yield $sql => [$sql, false];
+        }
     }
 
     public function testPlanRoundTripHashAndStrictYaml(): void

@@ -80,13 +80,15 @@ final class RekeyPlanner
                 }
                 $columns[] = ['name' => $column, 'source_type' => $from->getColumn($column)->getTypeName(), 'target_type' => $to->getColumn($column)->getTypeName(), 'conversion' => $integerToDecimal ? 'integer_to_decimal' : $check['conversion']];
             }
-            $tables[$name] = ['source' => $entry['source'], 'target' => $entry['target'], 'schema' => $schema, 'policy' => $policy, 'kind' => $isJoin ? 'join_table' : 'entity', 'source_key' => $sourceKey, 'target_key' => $targetKey, 'columns' => $columns, 'definitions' => $entry['definitions'], 'source_structure' => $entry['source_structure'], 'target_structure' => $entry['target_structure'], 'source_catalog' => $entry['source_catalog'], 'target_catalog' => $entry['target_catalog'], 'sequences' => $entry['sequences'], 'constraints' => $entry['constraints'], 'index_catalog' => $entry['index_catalog'], 'rewrite_rules' => $entry['rewrite_rules'], 'triggers' => $entry['triggers'], 'relation' => $entry['relation']];
+            $tables[$name] = ['source' => $entry['source'], 'target' => $entry['target'], 'schema' => $schema, 'policy' => $policy, 'kind' => $isJoin ? 'join_table' : 'entity', 'source_key' => $sourceKey, 'target_key' => $targetKey, 'columns' => $columns, 'target_projections' => [], 'definitions' => $entry['definitions'], 'source_structure' => $entry['source_structure'], 'target_structure' => $entry['target_structure'], 'source_catalog' => $entry['source_catalog'], 'target_catalog' => $entry['target_catalog'], 'sequences' => $entry['sequences'], 'constraints' => $entry['constraints'], 'index_catalog' => $entry['index_catalog'], 'rewrite_rules' => $entry['rewrite_rules'], 'triggers' => $entry['triggers'], 'relation' => $entry['relation']];
         }
         $used = [];
         foreach ($tables as $name => $table) {
             foreach ($table['source_structure']['foreign_keys'] as $fkName => $fk) {
                 $parent = $tables[$fk['parent']] ?? null;
                 $reason = null;
+                $self = $fk['parent'] === $name;
+                $nullable = array_any($fk['columns'], static fn (string $column): bool => $table['source_structure']['columns'][$column]['nullable']);
                 $remap = $parent !== null && $parent['policy'] === 'surrogate';
                 if ($parent === null || ($fk['parent_schema'] ?? $inventory['endpoint_identity']['source']['database']) !== $inventory['endpoint_identity']['source']['database']) {
                     $reason = 'reference outside the source plan';
@@ -94,25 +96,21 @@ final class RekeyPlanner
                     $reason = 'only full parent primary-key references are supported';
                 } elseif ($remap) {
                     foreach ($fk['columns'] as $column) {
-                        if ($table['source_structure']['columns'][$column]['nullable'] || !in_array($table['source_structure']['columns'][$column]['type'], ['smallint', 'integer', 'bigint'], true)) {
-                            $reason = 'remapped FK components must be non-nullable integers';
+                        if (!in_array($table['source_structure']['columns'][$column]['type'], ['smallint', 'integer', 'bigint'], true)) {
+                            $reason = 'remapped FK components must be integers';
                         }
-                        if ($table['kind'] !== 'join_table' && in_array($column, $table['source_key'], true)) {
+                        if (!$self && $table['kind'] !== 'join_table' && in_array($column, $table['source_key'], true)) {
                             $reason = 'remapped FK participates in child entity identity';
                         }
                         foreach ($incoming[$name] ?? [] as $referenced) {
-                            if (in_array($column, $referenced, true)) {
+                            if (!$self && in_array($column, $referenced, true)) {
                                 $reason = 'remapped FK participates in a key with incoming references';
                             }
                         }
                     }
                 }
-                if (count($fk['columns']) > 1) {
-                    foreach ($fk['columns'] as $column) {
-                        if ($table['source_structure']['columns'][$column]['nullable']) {
-                            $reason = 'nullable composite FK is unsupported';
-                        }
-                    }
+                if (($self || $nullable) && $fk['match'] !== 'SIMPLE') {
+                    $reason = 'nullable references and self-references require source MATCH SIMPLE semantics';
                 }
                 $candidates = [];
                 foreach ($table['target_structure']['foreign_keys'] as $targetName => $targetFk) {
@@ -127,12 +125,15 @@ final class RekeyPlanner
                 } else {
                     $used[$name][$targetName] = true;
                     foreach ($targetFk['columns'] as $column) {
-                        if ($remap && (isset($table['source_structure']['columns'][$column]) || $table['target_structure']['columns'][$column]['type'] !== 'bigint' || $table['target_structure']['columns'][$column]['nullable'])) {
-                            $reason = 'remap requires a new NOT NULL BIGINT FK column';
+                        if ($remap && (isset($table['source_structure']['columns'][$column]) || $table['target_structure']['columns'][$column]['type'] !== 'bigint' || $table['target_structure']['columns'][$column]['nullable'] !== $nullable)) {
+                            $reason = 'remap requires a new BIGINT FK column with nullability matching the source relationship';
                         }
                     }
                 }
-                $edges[] = ['name' => $fkName, 'child' => $name, 'parent' => $fk['parent'], 'source_columns' => $fk['columns'], 'referenced_columns' => $fk['referenced_columns'], 'target_columns' => $targetFk['columns'] ?? [], 'target_constraint' => $targetName, 'source_actions' => [$fk['on_update'], $fk['on_delete']], 'target_actions' => $targetFk === null ? [] : [$targetFk['on_update'], $targetFk['on_delete']], 'classification' => $reason !== null ? 'blocked' : ($remap ? 'remap' : 'preserve'), 'reason' => $reason];
+                if (!$remap && $nullable && count($fk['columns']) > 1 && $targetFk !== null && $targetFk['match'] !== 'SIMPLE') {
+                    $reason = 'preserved nullable composite references require target MATCH SIMPLE semantics';
+                }
+                $edges[] = ['name' => $fkName, 'child' => $name, 'parent' => $fk['parent'], 'self_reference' => $self, 'nullable' => $nullable, 'null_policy' => $nullable ? 'any_null_absent' : 'required', 'source_match' => $fk['match'], 'target_match' => $targetFk['match'] ?? null, 'source_columns' => $fk['columns'], 'referenced_columns' => $fk['referenced_columns'], 'target_columns' => $targetFk['columns'] ?? [], 'target_constraint' => $targetName, 'source_actions' => [$fk['on_update'], $fk['on_delete']], 'target_actions' => $targetFk === null ? [] : [$targetFk['on_update'], $targetFk['on_delete']], 'classification' => $reason !== null ? 'blocked' : ($remap ? 'remap' : 'preserve'), 'reason' => $reason];
             }
         }
         foreach ($tables as $name => $table) {
@@ -148,8 +149,16 @@ final class RekeyPlanner
                 }
             }
             foreach ($table['target_catalog'] as $column) {
-                if (!in_array($column['column_name'], $expected, true) || $column['is_generated'] !== 'NEVER' || ($column['is_identity'] === 'YES' && !in_array($column['column_name'], $table['target_key'], true))) {
-                    $blockers[] = $name.'.'.$column['column_name'].': unsupported extra/generated target projection.';
+                $columnName = $column['column_name'];
+                if ($column['is_generated'] !== 'NEVER' || ($column['is_identity'] === 'YES' && !in_array($columnName, $table['target_key'], true))) {
+                    $blockers[] = $name.'.'.$columnName.': unsupported generated target projection.';
+                } elseif (!in_array($columnName, $expected, true)) {
+                    $candidate = $inventory['tables'][$name]['projection_candidates'][$columnName] ?? null;
+                    if ($candidate === null || $candidate['error'] !== null) {
+                        $blockers[] = $name.'.'.$columnName.': '.($candidate['error'] ?? 'unsupported extra target projection.');
+                    } else {
+                        $tables[$name]['target_projections'][$columnName] = $candidate['projection'];
+                    }
                 }
             }
             foreach ($table['target_structure']['foreign_keys'] as $fkName => $fk) {

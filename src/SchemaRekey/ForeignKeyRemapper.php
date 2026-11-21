@@ -19,12 +19,24 @@ final class ForeignKeyRemapper
             $parent = $stages[$edge['parent']];
             $parentTable = $plan['tables'][$edge['parent']];
             $join = $this->join($target, $edge, 'c', 'p');
+            $present = $this->present($target, $edge, 'c');
+            $required = (int) $target->fetchOne('SELECT count(*) FROM '.$child['table'].' c WHERE '.$present);
             $count = (int) $target->fetchOne('SELECT count(*) FROM '.$child['table'].' c JOIN '.$parent['table'].' p ON '.$join);
-            if ($count !== $child['rows']) {
+            if ($count !== $required || ($edge['null_policy'] === 'required' && $required !== $child['rows'])) {
                 throw new \RuntimeException($edge['child'].'.'.$edge['name'].': missing or ambiguous source parent mapping.');
+            }
+            if ($edge['null_policy'] === 'any_null_absent') {
+                $target->executeStatement('UPDATE '.$child['table'].' c SET '.$quote($edge['target_columns'][0]).' = NULL WHERE NOT ('.$present.')');
             }
             $target->executeStatement('UPDATE '.$child['table'].' c SET '.$quote($edge['target_columns'][0]).' = p.'.$quote($parentTable['target_key'][0]).' FROM '.$parent['table'].' p WHERE '.$join);
         }
+    }
+
+    public function present(Connection $target, array $edge, string $alias): string
+    {
+        $quote = $target->getDatabasePlatform()->quoteSingleIdentifier(...);
+
+        return implode(' AND ', array_map(static fn (string $column): string => $alias.'.'.$quote($column).' IS NOT NULL', $edge['source_columns']));
     }
 
     public function join(Connection $target, array $edge, string $childAlias, string $parentAlias): string

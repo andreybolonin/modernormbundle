@@ -107,6 +107,7 @@ final class RekeyTransfer
             $source->executeStatement("SET NAMES utf8mb4 COLLATE utf8mb4_bin");
             $source->executeStatement("SET SESSION time_zone = '+00:00'");
             $target->executeStatement("SET TIME ZONE 'UTC'");
+            $target->executeStatement('SET standard_conforming_strings=on');
             if (!$dry) {
                 $report['stage'] = 'source_fence';
                 $session = (new SourceFence())->acquire($source);
@@ -255,6 +256,12 @@ final class RekeyTransfer
             $io->text('Stage: '.$report['stage'].'; plan: '.($report['plan_hash'] ?? 'unavailable'));
             if (isset($report['plan'])) {
                 $io->table(['Source', 'Target', 'Policy', 'Source PK', 'Target PK'], array_map(static fn (array $table): array => [$table['source'], $table['target'], $table['policy'], implode(', ', $table['source_key']), implode(', ', $table['target_key'])], array_values($report['plan']['tables'])));
+                foreach ($report['plan']['tables'] as $table) {
+                    if ($table['target_projections'] !== []) {
+                        $io->section($table['target'].' target-only columns');
+                        $io->table(['Column', 'Fill', 'Type'], array_map(static fn (string $column, array $projection): array => [$column, $projection['operation'], $projection['target_type']], array_keys($table['target_projections']), array_values($table['target_projections'])));
+                    }
+                }
             }
             if (isset($report['value_validation'])) {
                 $scanResult = $report['value_validation'];
