@@ -51,7 +51,7 @@ final class Runner
             $began = true;
             if (!$append && [] !== $schema->getTables()) {
                 // All managed tables together handle internal FK cycles, without CASCADE into foreign tables.
-                $tables = array_map(static fn ($table): string => $table->getQuotedName($connection->getDatabasePlatform()), $schema->getTables());
+                $tables = array_map(static fn ($table): string => $table->getObjectName()->toSQL($connection->getDatabasePlatform()), $schema->getTables());
                 $connection->executeStatement('TRUNCATE TABLE '.implode(', ', $tables).' RESTART IDENTITY');
             }
             foreach ($fixtures as $fixture) {

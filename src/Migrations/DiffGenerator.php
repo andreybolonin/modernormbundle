@@ -6,6 +6,8 @@ namespace ModernORM\Bundle\Migrations;
 
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Schema\ComparatorConfig;
+use Doctrine\DBAL\Schema\SchemaDiff;
 use Doctrine\Migrations\DependencyFactory;
 use Doctrine\Migrations\Generator\DiffGenerator as BaseDiffGenerator;
 use Doctrine\Migrations\Generator\Exception\NoChangesDetected;
@@ -33,10 +35,9 @@ final class DiffGenerator extends BaseDiffGenerator
         if (null !== $filterExpression) {
             throw new \InvalidArgumentException('Configure schema ownership through managed_schema_filter, not a diff filter override.');
         }
-        if (!$this->scope->supportsMigrationPlan()) {
-            return parent::generate($fqcn, null, $formatted, $nowdocOutput, $lineLength, $checkDbPlatform, $fromEmptySchema);
-        }
-        $plan = $this->scope->migrationPlan($this->connection, $fromEmptySchema);
+        $plan = $this->scope->supportsMigrationPlan()
+            ? $this->scope->migrationPlan($this->connection, $fromEmptySchema)
+            : $this->ordinaryPlan($fromEmptySchema);
         if ([] === $plan['up'] && [] === $plan['down']) {
             throw NoChangesDetected::new();
         }
@@ -45,4 +46,27 @@ final class DiffGenerator extends BaseDiffGenerator
 
         return $this->generator->generateMigration($fqcn, $up, $down);
     }
+
+    private function ordinaryPlan(bool $fromEmptySchema): array
+    {
+        $manager = $this->connection->createSchemaManager();
+        $from = $fromEmptySchema ? (new EmptySchemaProvider($manager))->createSchema() : $manager->introspectSchema();
+        $to = (new SchemaProvider($this->scope))->createSchema();
+        $comparator = $manager->createComparator((new ComparatorConfig())->withReportModifiedIndexes(false));
+        $up = $comparator->compareSchemas($from, $to);
+        $down = $comparator->compareSchemas($to, $from);
+        // Empty namespaces have no editor API. Keep existing namespaces in place by
+        // omitting their drop (up) and redundant create (down) from the diffs.
+        $up = $this->namespaceDiff($up, $up->getCreatedSchemas(), []);
+        $down = $this->namespaceDiff($down, [], $down->getDroppedSchemas());
+        $platform = $this->connection->getDatabasePlatform();
+
+        return ['up' => $platform->getAlterSchemaSQL($up), 'down' => $platform->getAlterSchemaSQL($down)];
+    }
+
+    private function namespaceDiff(SchemaDiff $diff, array $created, array $dropped): SchemaDiff
+    {
+        return new SchemaDiff($created, $dropped, $diff->getCreatedTables(), $diff->getAlteredTables(), $diff->getDroppedTables(), $diff->getCreatedSequences(), $diff->getAlteredSequences(), $diff->getDroppedSequences());
+    }
+
 }

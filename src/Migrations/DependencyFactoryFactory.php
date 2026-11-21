@@ -38,7 +38,7 @@ final class DependencyFactoryFactory
         $configuration->setTransactional(true);
         $configuration->setCheckDatabasePlatform(true);
         $factory = DependencyFactory::fromConnection(new ExistingConfiguration($configuration), new ExistingConnection($connection));
-        $factory->setService(\Doctrine\Migrations\Provider\SchemaProvider::class, new SchemaProvider($scope, $connection));
+        $factory->setService(\Doctrine\Migrations\Provider\SchemaProvider::class, new SchemaProvider($scope));
         // History must remain visible to storage and commit on the same connection as migration SQL.
         // Diff introspection gets its own filter, excluding history without hiding it from tablesExist().
         $diffConfiguration = new DbalConfiguration();
