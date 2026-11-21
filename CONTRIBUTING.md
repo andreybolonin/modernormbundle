@@ -1,6 +1,6 @@
 # Contributing
 
-Use PHP 8.4/8.5, Symfony 7.4/8.1, PostgreSQL 17+ and MySQL 8.4. Install dependencies with Composer; the published core package is resolved without a sibling checkout.
+Use PHP 8.4/8.5/8.6, Symfony 7.4/8.1, PostgreSQL 17/18/19 and MySQL 8.4. Install dependencies with Composer; the published core package is resolved without a sibling checkout.
 
 ```sh
 composer install

@@ -45,15 +45,49 @@ final class Planner
             }
             $mapped[$name] = $class;
         }
+        $joins = [];
+        $classes = [];
+        foreach ($mapped as $class) {
+            $classes[$class->name] = $class;
+        }
+        foreach ($mapped as $class) {
+            foreach ($class->associationMappings as $association) {
+                if (!$association->isManyToManyOwningSide()) {
+                    continue;
+                }
+                $join = $association->joinTable;
+                $name = $join->name;
+                $other = $classes[$association->targetEntity] ?? null;
+                if (isset($mapped[$name]) || isset($joins[$name])) {
+                    $errors[] = $name.': ambiguous join-table mapping.';
+                    continue;
+                }
+                if ($other === null || count($class->getIdentifierColumnNames()) !== 1 || count($other->getIdentifierColumnNames()) !== 1 || count($join->joinColumns) !== 1 || count($join->inverseJoinColumns) !== 1) {
+                    $errors[] = $name.': join tables require two mapped entities with single-column identifiers and one join column per side.';
+                    continue;
+                }
+                if ($join->joinColumns[0]->referencedColumnName !== $class->getIdentifierColumnNames()[0] || $join->inverseJoinColumns[0]->referencedColumnName !== $other->getIdentifierColumnNames()[0]) {
+                    $errors[] = $name.': join columns must reference entity primary keys.';
+                    continue;
+                }
+                $columns = [$join->joinColumns[0]->name, $join->inverseJoinColumns[0]->name];
+                if (count(array_unique($columns)) !== 2) {
+                    $errors[] = $name.': join columns must have distinct names.';
+                    continue;
+                }
+                $joins[$name] = ['schema' => $join->schema ?? 'public', 'columns' => $columns, 'parents' => [[$class->getTableName(), $class->table['schema'] ?? 'public', $class->getIdentifierColumnNames()[0]], [$other->getTableName(), $other->table['schema'] ?? 'public', $other->getIdentifierColumnNames()[0]]]];
+            }
+        }
         foreach ($names as $name) {
-            if (!isset($mapped[$name])) {
+            if (!isset($mapped[$name]) && !isset($joins[$name])) {
                 $errors[] = $name.': source table has no entity mapping; its data would be omitted.';
             }
             if (!isset($snapshot['tables'][$name])) {
                 $errors[] = $name.': source table was skipped by schema introspection; manual mapping is required.';
             }
         }
-        foreach ($mapped as $name => $class) {
+        foreach (array_merge($mapped, array_fill_keys(array_keys($joins), null)) as $name => $class) {
+            $join = $joins[$name] ?? null;
             if (!in_array($name, $names, true)) {
                 $errors[] = $name.': mapped table is missing from the MySQL source.';
                 continue;
@@ -62,7 +96,7 @@ final class Planner
                 continue;
             }
             $from = $snapshot['tables'][$name];
-            $schema = $class->table['schema'] ?? 'public';
+            $schema = $join['schema'] ?? $class?->table['schema'] ?? 'public';
             $destination = $platform->quoteSingleIdentifier($schema).'.'.$platform->quoteSingleIdentifier($name);
             $destinations[$destination] = $name;
             $dependencies[$name] = [];
@@ -74,13 +108,32 @@ final class Planner
             if ($target->fetchOne('SELECT 1 FROM '.$destination.' LIMIT 1') !== false) {
                 $errors[] = $name.': target table is not empty.';
             }
+            if ($join !== null) {
+                foreach ([$from, $to] as $index => $physical) {
+                    foreach ($join['columns'] as $side => $columnName) {
+                        [$parent, $parentSchema, $parentKey] = $join['parents'][$side];
+                        $found = false;
+                        foreach ($physical->getForeignKeys() as $fk) {
+                            $reference = $fk->getReferencedTableName();
+                            $local = array_map(static fn ($column): string => $column->getIdentifier()->getValue(), $fk->getReferencingColumnNames());
+                            $remote = array_map(static fn ($column): string => $column->getIdentifier()->getValue(), $fk->getReferencedColumnNames());
+                            if ($local === [$columnName] && $remote === [$parentKey] && $reference->getUnqualifiedName()->getValue() === $parent && ($reference->getQualifier()?->getValue() ?? ($index === 0 ? $database : $schema)) === ($index === 0 ? $database : $parentSchema)) {
+                                $found = true;
+                            }
+                        }
+                        if (!$found) {
+                            $errors[] = $name.'.'.$columnName.': join table requires a matching '.($index === 0 ? 'source' : 'target').' foreign key to the mapped entity primary key.';
+                        }
+                    }
+                }
+            }
             $sourceKey = $this->primaryColumns($from);
             $targetKey = $this->primaryColumns($to);
-            if (count($sourceKey) !== 1 || $targetKey !== $sourceKey || $sourceKey !== $class->getIdentifierColumnNames()) {
-                $errors[] = $name.': requires matching single-column primary keys in source, mapping and target.';
+            if ($join !== null ? (count($sourceKey) !== 2 || $targetKey !== $sourceKey || array_diff($sourceKey, $join['columns']) !== []) : (count($sourceKey) !== 1 || $targetKey !== $sourceKey || $sourceKey !== $class->getIdentifierColumnNames())) {
+                $errors[] = $name.': requires matching primary keys in source, mapping and target (single-column for entities, both join columns for join tables).';
             }
-            $columnNames = $class->getColumnNames();
-            foreach ($class->fieldMappings as $field) {
+            $columnNames = $join['columns'] ?? $class->getColumnNames();
+            foreach ($class->fieldMappings ?? [] as $field) {
                 if ($to->hasColumn($field->columnName)) {
                     $check = (new TypeCompatibility())->compare(new Column($field->columnName, $field->type), $to->getColumn($field->columnName));
                     if ($check['error'] !== null) {
@@ -88,13 +141,11 @@ final class Planner
                     }
                 }
             }
-            foreach ($class->associationMappings as $association) {
+            foreach ($class->associationMappings ?? [] as $association) {
                 if ($association->isToOneOwningSide()) {
-                    foreach ($association->joinColumns as $join) {
-                        $columnNames[] = $join->name;
+                    foreach ($association->joinColumns as $joinColumn) {
+                        $columnNames[] = $joinColumn->name;
                     }
-                } elseif ($association->isManyToMany()) {
-                    $errors[] = $name.': ManyToMany join-table transfer is not supported in this first version.';
                 }
             }
             $columnNames = array_values(array_unique($columnNames));
@@ -137,11 +188,11 @@ final class Planner
             }
             $sequence = count($targetKey) === 1 ? $target->fetchOne('SELECT pg_catalog.pg_get_serial_sequence(?, ?)', [$destination, $targetKey[0]]) : null;
             $effectiveBatchSize = min($batchSize, max(1, intdiv(65535, max(1, count($columns)))));
-            $tables[$name] = ['source' => $database.'.'.$name, 'target' => $destination, 'entity' => $class->name, 'primary_key' => $sourceKey, 'protected_columns' => $sourceKey, 'columns' => $columns, 'batch_size' => $effectiveBatchSize, 'sequence_after_load' => $sequence ?: null];
+            $tables[$name] = ['source' => $database.'.'.$name, 'target' => $destination, 'entity' => $class?->name, 'kind' => $join === null ? 'entity' : 'join_table', 'primary_key' => $sourceKey, 'protected_columns' => $sourceKey, 'columns' => $columns, 'batch_size' => $effectiveBatchSize, 'sequence_after_load' => $sequence ?: null];
         }
         foreach ($tables as $name => $table) {
-            $class = $mapped[$name];
-            $schema = $class->table['schema'] ?? 'public';
+            $class = $mapped[$name] ?? null;
+            $schema = $joins[$name]['schema'] ?? $class?->table['schema'] ?? 'public';
             $to = $target->createSchemaManager()->introspectTableByQuotedName($name, $schema);
             foreach ($to->getForeignKeys() as $fk) {
                 $parent = $fk->getReferencedTableName();

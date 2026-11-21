@@ -39,16 +39,15 @@ final class Loader
                 $report['table'] = $name;
                 $report['batch'] = 0;
                 $report['tables'][$name] = ['source_rows' => 0, 'target_rows' => 0, 'keys_verified' => false];
-                $key = $table['primary_key'][0];
-                $keyType = $description['definitions'][$key]['sql_type'];
-                $quotedKey = $platform->quoteSingleIdentifier($key);
+                $keys = $table['primary_key'];
+                $keyProjection = implode(', ', array_map(static fn (string $key): string => 'CAST('.$platform->quoteSingleIdentifier($key).' AS text)', $keys));
                 foreach ($reader->batches($source, $name, $table) as $rows) {
                     ++$report['batch'];
                     $parameters = $types = $tuples = $keyInputs = [];
                     foreach ($rows as $row) {
-                        $row = $rules->applyRow($name, $row, [$key => $row[$key]], $journal);
+                        $row = $rules->applyRow($name, $row, array_intersect_key($row, array_flip($keys)), $journal);
                         $expressions = [];
-                        $keyInputs[] = $values->input($row[$key]);
+                        $keyInputs[] = array_map(static fn (string $key): string => $values->input($row[$key]), $keys);
                         foreach ($table['columns'] as $entry) {
                             $column = $entry['name'];
                             $raw = $row[$column];
@@ -60,9 +59,11 @@ final class Loader
                         }
                         $tuples[] = '('.implode(', ', $expressions).')';
                     }
-                    $expected = $this->canonicalKeys($target, $keyInputs, $keyType);
+                    $expected = $this->canonicalKeys($target, $keyInputs, $keys, $description);
                     $columns = implode(', ', array_map(static fn (array $entry): string => $platform->quoteSingleIdentifier($entry['name']), $table['columns']));
-                    $inserted = $target->fetchFirstColumn('INSERT INTO '.$table['target'].' ('.$columns.') OVERRIDING SYSTEM VALUE VALUES '.implode(', ', $tuples).' RETURNING CAST('.$quotedKey.' AS text)', $parameters, $types);
+                    $inserted = $target->fetchAllNumeric('INSERT INTO '.$table['target'].' ('.$columns.') OVERRIDING SYSTEM VALUE VALUES '.implode(', ', $tuples).' RETURNING '.$keyProjection, $parameters, $types);
+                    $expected = array_map('serialize', $expected);
+                    $inserted = array_map('serialize', $inserted);
                     sort($expected, SORT_STRING);
                     sort($inserted, SORT_STRING);
                     if ($inserted !== $expected) {
@@ -85,11 +86,18 @@ final class Loader
                     throw new \RuntimeException('Source/target row counts differ after triggers.');
                 }
                 $description = (new TargetColumns())->describe($target, $table['target']);
-                $key = $table['primary_key'][0];
-                $keyType = $description['definitions'][$key]['sql_type'];
+                $keys = $table['primary_key'];
                 foreach ($reader->batches($source, $name, $table) as $rows) {
-                    $parameters = array_map(static fn (array $row): string => $values->input($row[$key]), $rows);
-                    $matches = (int) $target->fetchOne('SELECT count(*) FROM '.$table['target'].' WHERE '.$platform->quoteSingleIdentifier($key).' IN ('.implode(', ', array_fill(0, count($rows), 'CAST(? AS '.$keyType.')')).')', $parameters);
+                    $parameters = $predicates = [];
+                    foreach ($rows as $row) {
+                        $parts = [];
+                        foreach ($keys as $key) {
+                            $parameters[] = $values->input($row[$key]);
+                            $parts[] = 'CAST(? AS '.$description['definitions'][$key]['sql_type'].')';
+                        }
+                        $predicates[] = '('.implode(', ', $parts).')';
+                    }
+                    $matches = (int) $target->fetchOne('SELECT count(*) FROM '.$table['target'].' WHERE ('.implode(', ', array_map($platform->quoteSingleIdentifier(...), $keys)).') IN ('.implode(', ', $predicates).')', $parameters);
                     if ($matches !== count($rows)) {
                         throw new \RuntimeException('Source primary keys are missing after triggers.');
                     }
@@ -114,9 +122,19 @@ final class Loader
         }
     }
 
-    private function canonicalKeys(Connection $target, array $values, string $type): array
+    private function canonicalKeys(Connection $target, array $rows, array $keys, array $description): array
     {
-        return $target->fetchFirstColumn('SELECT CAST(CAST(value AS '.$type.') AS text) FROM (VALUES '.implode(', ', array_fill(0, count($values), '(CAST(? AS text))')).') AS keys(value)', $values);
+        $parameters = $tuples = [];
+        foreach ($rows as $row) {
+            $expressions = [];
+            foreach ($keys as $index => $key) {
+                $parameters[] = $row[$index];
+                $expressions[] = 'CAST(CAST(? AS '.$description['definitions'][$key]['sql_type'].') AS text)';
+            }
+            $tuples[] = '('.implode(', ', $expressions).')';
+        }
+
+        return $target->fetchAllNumeric('VALUES '.implode(', ', $tuples), $parameters);
     }
 
     private function resetSequences(Connection $target, array $plan, array &$report): void

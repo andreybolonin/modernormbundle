@@ -192,7 +192,7 @@ final class TransferCommand extends Command
             }
             foreach ($plan['tables'] as $name => $table) {
                 $io->section($table['source'].' -> '.$table['target']);
-                $io->text('Entity: '.$table['entity'].'; planned batch size: '.$table['batch_size']);
+                $io->text(($table['entity'] === null ? 'ManyToMany join table' : 'Entity: '.$table['entity']).'; planned batch size: '.$table['batch_size']);
                 $io->table(['Column', 'Planned conversion'], array_map(static fn (array $column): array => [$column['name'], $column['conversion']], $table['columns']));
                 if ($table['sequence_after_load'] !== null) {
                     $io->text('Owned sequence: '.$table['sequence_after_load'].($write ? ' (see load result).' : ' (reset not executed).'));

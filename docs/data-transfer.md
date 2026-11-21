@@ -29,13 +29,21 @@ does not create target tables or modify the generated entities.
 ## What the plan checks
 
 - All ordinary MySQL tables in the source URL's database are inventoried. Views
-  are ignored. Each table must have a single corresponding concrete entity;
-  skipped/unmapped tables are errors rather than silent data omissions.
+  are ignored. Each table must have a single corresponding concrete entity or an owning-side
+  ManyToMany join-table mapping; skipped/unmapped tables are errors rather than
+  silent data omissions.
 - Source and target table/column names must match the entity's physical names.
   Explicit table/column renaming, table filters and multiple entities with the
   same table name in different target schemas are not supported yet.
-- Source, mapping and target need the same single-column primary key. Composite
-  IDs and ManyToMany join-table transfer are unsupported.
+- Entity tables need the same single-column primary key in source, mapping and
+  target. Composite entity IDs remain unsupported.
+- ManyToMany join tables are transferred directly without a separate entity. Both
+  entities must be mapped with single-column IDs; each side must have one join
+  column referencing its entity PK. The join table must have exactly those two
+  source columns and the same two-column PK in source and target, with matching
+  physical FKs on both sides. Extra source payload columns, ambiguous table
+  mappings and references to non-PK columns are rejected. Inverse mappings do not
+  duplicate the table. Explicit join-table schemas are honored (default public).
 - Target tables must exist and appear empty to the target connection. Required
   target columns need a mapped source value, a default or server generation.
   Mapped target generated columns cannot receive copied values.
@@ -287,7 +295,8 @@ After loading it forces deferred constraints with `SET CONSTRAINTS ALL IMMEDIATE
 compares row counts and checks every source PK still exists in the target. Trigger
 transformations of other columns are allowed; this is not byte-for-byte content
 verification. CHECK, UNIQUE, FK and trigger behavior is exercised by PostgreSQL.
-Existing planner restrictions, including cycles and ManyToMany, still apply.
+Existing planner restrictions, including FK cycles, still apply. Join tables load
+after their referenced entities; verification compares complete key pairs.
 
 Owned PK sequences are reset after verification, including empty-table starts
 and descending increments. Exhausted or incompatible sequence ranges fail the

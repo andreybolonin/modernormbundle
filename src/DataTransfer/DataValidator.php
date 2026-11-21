@@ -28,12 +28,12 @@ final class DataValidator
             $description = (new TargetColumns())->describe($target, $table['target']);
             $columns = $description['columns'];
             $specifications = $description['definitions'];
-            $key = $table['primary_key'][0];
             $report['tables'][$name] = ['rows_scanned' => 0, 'invalid_rows' => 0, 'error_count' => 0];
             foreach ((new BatchReader())->batches($source, $name, $table) as $rows) {
                 $pending = $failedRows = [];
                 foreach ($rows as $rowIndex => $row) {
-                    $row = $rules->applyRow($name, $row, [$key => $row[$key]], $journal);
+                    $primaryKey = array_intersect_key($row, array_flip($table['primary_key']));
+                    $row = $rules->applyRow($name, $row, $primaryKey, $journal);
                     ++$report['rows_scanned'];
                     ++$report['tables'][$name]['rows_scanned'];
                     foreach ($table['columns'] as $entry) {
@@ -43,7 +43,7 @@ final class DataValidator
                         $definition = $specifications[$columnName];
                         $suggestions?->observe($name, $columnName, $value, $column, in_array($columnName, array_merge($table['primary_key'], $table['protected_columns'] ?? []), true));
                         $error = $validator->check($value, $column, $definition['datetime_precision'] === null ? null : (int) $definition['datetime_precision']);
-                        $cell = ['row' => $rowIndex, 'primary_key' => [$key => $this->displayKey($row[$key])], 'column' => $columnName];
+                        $cell = ['row' => $rowIndex, 'primary_key' => array_map($this->displayKey(...), $primaryKey), 'column' => $columnName];
                         if ($error !== null) {
                             $this->record($report, $failedRows, $name, $cell, $error, $maxExamples, $suggestions);
                         } elseif ($value !== null && !in_array($column->getTypeName(), ['binary', 'blob'], true)) {
