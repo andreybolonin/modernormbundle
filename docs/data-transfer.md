@@ -26,6 +26,11 @@ and set their Table schema to the intended PostgreSQL schema (`public` if absent
 Create and review the PostgreSQL schema before planning a transfer. The command
 does not create target tables or modify the generated entities.
 
+For legacy entity tables with composite PKs, use the separate
+[`--schema-rekey` execution path](schema-rekey.md). It stages source data, assigns
+BIGINT surrogate IDs and remaps declared FK/ManyToMany references using a saved
+plan. The ordinary transfer below preserves entity IDs and its existing contract.
+
 ## What the plan checks
 
 - All ordinary MySQL tables in the source URL's database are inventoried. Views

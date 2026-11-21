@@ -73,7 +73,9 @@ final class MySqlSchemaReader
                 }
                 if (str_contains(strtolower($column['EXTRA']), 'default_generated') && $field->getDefault() !== null && !$field->getDefault() instanceof DefaultExpression) {
                     $warnings[] = $label.': SQL expression default requires manual mapping and was omitted.';
-                    $field->setDefault(null);
+                    $table = $table->edit()->modifyColumnByUnquotedName($column['COLUMN_NAME'], static function ($editor): void {
+                        $editor->setDefaultValue(null);
+                    })->create();
                 }
                 if (str_contains(strtolower($column['EXTRA']), 'on update')) {
                     $warnings[] = $label.': ON UPDATE expression requires manual mapping.';

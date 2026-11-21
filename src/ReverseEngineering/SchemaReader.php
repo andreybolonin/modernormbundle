@@ -9,6 +9,7 @@ use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Doctrine\DBAL\Platforms\MariaDBPlatform;
 use Doctrine\DBAL\Schema\Table;
+use Doctrine\DBAL\Schema\Index\IndexType;
 
 final class SchemaReader
 {
@@ -59,8 +60,13 @@ final class SchemaReader
             $realIndexes = $this->connection->fetchFirstColumn('SELECT indexname FROM pg_catalog.pg_indexes WHERE schemaname = ? AND tablename = ?', [$schema, $name]);
             foreach ($tables[$name]->getIndexes() as $index) {
                 $indexName = $index->getObjectName()->getIdentifier()->getValue();
-                if (!$index->isPrimary() && !in_array($indexName, $realIndexes, true)) {
-                    $tables[$name]->dropIndex($index->getName());
+                $indexed = array_map(static fn ($column): string => $column->getColumnName()->getIdentifier()->getValue(), $index->getIndexedColumns());
+                $primary = array_map(static fn ($column): string => $column->getIdentifier()->getValue(), $tables[$name]->getPrimaryKeyConstraint()?->getColumnNames() ?? []);
+                if ($index->getType() === IndexType::UNIQUE && $indexed === $primary) {
+                    continue;
+                }
+                if (!in_array($indexName, $realIndexes, true)) {
+                    $tables[$name] = $tables[$name]->edit()->dropIndex($index->getObjectName())->create();
                 }
             }
             $columns = $this->connection->fetchAllAssociative("SELECT a.attname, a.attidentity, pg_catalog.pg_get_serial_sequence(pg_catalog.quote_ident(n.nspname) || '.' || pg_catalog.quote_ident(c.relname), a.attname) AS sequence_name FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid = a.attrelid JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = ? AND c.relname = ? AND a.attnum > 0 AND NOT a.attisdropped", [$schema, $name]);
@@ -69,7 +75,9 @@ final class SchemaReader
                     throw new \RuntimeException('Identifiers containing backticks require manual mapping.');
                 }
                 if ($column['attidentity'] !== '') {
-                    $tables[$name]->getColumn($column['attname'])->setAutoincrement(true);
+                    $tables[$name] = $tables[$name]->edit()->modifyColumnByUnquotedName($column['attname'], static function ($editor): void {
+                        $editor->setAutoincrement(true);
+                    })->create();
                 } elseif ($column['sequence_name'] !== null && count($tables[$name]->getPrimaryKeyConstraint()?->getColumnNames() ?? []) === 1 && $tables[$name]->getPrimaryKeyConstraint()->getColumnNames()[0]->getIdentifier()->getValue() === $column['attname']) {
                     $sequence = $this->connection->fetchAssociative('SELECT seqincrement, seqmin FROM pg_catalog.pg_sequence WHERE seqrelid = CAST(? AS regclass)', [$column['sequence_name']]);
                     if ($sequence === false || (int) $sequence['seqincrement'] !== 1 || (int) $sequence['seqmin'] !== 1) {

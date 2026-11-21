@@ -26,6 +26,10 @@ final class TransferCommand extends Command
     protected function configure(): void
     {
         $this->setDescription('Plan, rehearse or execute a MySQL to PostgreSQL data transfer.')
+            ->addOption('schema-rekey', null, InputOption::VALUE_NONE, 'Use staging and surrogate IDs to transfer composite entity primary keys.')
+            ->addOption('plan', null, InputOption::VALUE_REQUIRED, 'Optional saved YAML plan to recheck; requires --schema-rekey.')
+            ->addOption('plan-output', null, InputOption::VALUE_REQUIRED, 'Optional new YAML plan file; requires --schema-rekey.')
+            ->addOption('target-schema', null, InputOption::VALUE_REQUIRED, 'Prepared target schema for --schema-rekey (default public).')
             ->addOption('source-url-env', null, InputOption::VALUE_REQUIRED, 'Environment variable holding the MySQL source URL.')
             ->addOption('target-url-env', null, InputOption::VALUE_REQUIRED, 'Environment variable holding the PostgreSQL target URL.')
             ->addOption('batch-size', null, InputOption::VALUE_REQUIRED, 'Planned maximum rows per batch.', '1000')
@@ -44,6 +48,12 @@ final class TransferCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        if ($input->getOption('schema-rekey')) {
+            return (new \ModernORM\Bundle\SchemaRekey\RekeyTransfer($this->applicationConnection))->run($input, $output);
+        }
+        if ($input->getOption('plan') !== null || $input->getOption('plan-output') !== null || $input->getOption('target-schema') !== null) {
+            throw new \InvalidArgumentException('--plan, --plan-output and --target-schema require --schema-rekey.');
+        }
         $rehearsal = $input->getOption('rehearsal');
         $production = $input->getOption('execute');
         $write = $rehearsal || $production;

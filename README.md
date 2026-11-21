@@ -14,6 +14,10 @@ for a streaming audit of changed PKs.
 reviewed JSON file and revalidates it without loading data.
 Use `--execute` for the final transfer to the explicitly selected empty PostgreSQL
 target after stopping source writes. Application cutover remains a separate step.
+Use [`--schema-rekey`](docs/schema-rekey.md) for a full transfer that replaces
+composite entity PKs with BIGINT IDs and remaps FK/ManyToMany links through staging.
+Optional saved plans bind the schemas, endpoints and shared transformation rules;
+without a plan file, the command builds and checks the plan in memory.
 
 **Find expensive ORM work in Symfony. Follow it from the Profiler to Grafana.**
 

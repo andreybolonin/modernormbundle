@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `modernorm:data:transfer --schema-rekey`: independent physical-schema planning, optional strict saved YAML plans, transactional raw/typed staging, BIGINT surrogate IDs, FK/ManyToMany remapping, full source/value/edge verification and sequence synchronization. Share the existing rules, interactive suggestions and JSONL audit engine, bind rules hashes to plans and protect all key columns. Write modes require an offline MySQL global read fence and a prepared empty PostgreSQL target; ordinary transfer behavior is unchanged.
+
 - Print an upfront `--execute` warning before opening database connections: stop MySQL writes and target traffic, account for snapshot limits and require empty target tables. Keep JSON stdout clean by using stderr.
 
 - Add explicit `modernorm:data:transfer --execute` for final MySQL → PostgreSQL loading, including the configured application database. Reuse rehearsal validation, transformations, transactional loading, constraint/count/PK checks and owned-sequence resets; modes are exclusive, empty targets remain required and application configuration is never switched automatically.

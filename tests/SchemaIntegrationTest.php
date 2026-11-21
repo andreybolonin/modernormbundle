@@ -115,6 +115,9 @@ final class SchemaIntegrationTest extends TestCase
         $db = $this->manager->getConnection();
         $originalFilter = $db->getConfiguration()->getSchemaAssetsFilter();
         $foreignSchema = 'mf_namespace_'.bin2hex(random_bytes(4));
+        $quotedSchema = 'MF_Quoted_'.bin2hex(random_bytes(4));
+        $quotedIdentifier = $db->getDatabasePlatform()->quoteSingleIdentifier($quotedSchema);
+        $db->executeStatement('CREATE SCHEMA '.$quotedIdentifier);
         $db->executeStatement('CREATE SCHEMA '.$foreignSchema);
         $foreign = 'mf_foreign_'.bin2hex(random_bytes(4));
         $db->executeStatement('CREATE TABLE public.'.$foreign.' (id INT PRIMARY KEY)');
@@ -126,6 +129,7 @@ final class SchemaIntegrationTest extends TestCase
             self::assertSame(0, $diff->execute(['--allow-empty-diff' => true], ['interactive' => false]));
             self::assertCount(1, glob($this->directory.'/*.php'));
             self::assertTrue($db->createSchemaManager()->tablesExist([$foreign]));
+            self::assertSame(1, (int) $db->fetchOne('SELECT count(*) FROM pg_catalog.pg_namespace WHERE nspname=?', [$quotedSchema]));
             self::assertSame($originalFilter, $db->getConfiguration()->getSchemaAssetsFilter(), 'No filter leaks into the ORM connection.');
             // Alter mapping and run a second version through the same standard migration engine.
             $this->manager->getClassMetadata(Record::class)->mapField(['fieldName' => 'note', 'type' => 'string', 'nullable' => true]);
@@ -141,6 +145,7 @@ final class SchemaIntegrationTest extends TestCase
         } finally {
             $db->executeStatement('DROP TABLE public.'.$foreign);
             $db->executeStatement('DROP SCHEMA '.$foreignSchema);
+            $db->executeStatement('DROP SCHEMA '.$quotedIdentifier);
         }
     }
     public function testFixtureDependenciesReferencesGeneratedIdsAndL2Invalidation(): void

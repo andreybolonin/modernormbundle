@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ModernORM\Bundle\ReverseEngineering;
 
 use Doctrine\DBAL\Schema\Table;
+use Doctrine\DBAL\Schema\Index\IndexType;
 use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Schema\DefaultExpression;
@@ -57,20 +58,20 @@ final class EntityGenerator
             $attributes = ['#[ORM\\Entity]', '#[ORM\\Table(name: '.$this->literal('`'.$name.'`').', schema: '.$this->literal($schema).')]'];
             $uniqueNames = [];
             foreach ($table->getUniqueConstraints() as $constraint) {
-                $uniqueNames[] = $constraint->getName();
+                $uniqueNames[] = $constraint->getObjectName()?->getIdentifier()->getValue() ?? '';
                 $columns = array_map(static fn ($column): string => $column->toSQL($platform), $constraint->getColumnNames());
-                $attributes[] = '#[ORM\\UniqueConstraint(name: '.$this->literal($constraint->getName()).', columns: '.$this->literal($columns).')]';
+                $attributes[] = '#[ORM\\UniqueConstraint(name: '.$this->literal($constraint->getObjectName()?->getIdentifier()->getValue() ?? '').', columns: '.$this->literal($columns).')]';
             }
             foreach ($table->getIndexes() as $index) {
-                if ($index->isPrimary() || in_array($index->getName(), $uniqueNames, true)) {
+                if (($index->getType() === IndexType::UNIQUE && array_map(static fn ($column): string => $column->getColumnName()->getIdentifier()->getValue(), $index->getIndexedColumns()) === $this->primaryColumns($table)) || in_array($index->getObjectName()->getIdentifier()->getValue(), $uniqueNames, true)) {
                     continue;
                 }
-                if ($index->getFlags() !== [] || $index->getOptions() !== [] || array_any($index->getIndexedColumns(), static fn ($column): bool => $column->getLength() !== null)) {
-                    $warnings[] = $name.': index '.$index->getName().' requires manual review.';
+                if (!in_array($index->getType(), [IndexType::REGULAR, IndexType::UNIQUE], true) || $index->isClustered() || $index->getPredicate() !== null || array_any($index->getIndexedColumns(), static fn ($column): bool => $column->getLength() !== null)) {
+                    $warnings[] = $name.': index '.$index->getObjectName()->getIdentifier()->getValue().' requires manual review.';
                     continue;
                 }
-                $columns = $index->getQuotedColumns($platform);
-                $attributes[] = '#[ORM\\'.($index->isUnique() ? 'UniqueConstraint' : 'Index').'(name: '.$this->literal($index->getName()).', columns: '.$this->literal($columns).')]';
+                $columns = array_map(static fn ($column): string => $column->getColumnName()->toSQL($platform), $index->getIndexedColumns());
+                $attributes[] = '#[ORM\\'.($index->getType() === IndexType::UNIQUE ? 'UniqueConstraint' : 'Index').'(name: '.$this->literal($index->getObjectName()->getIdentifier()->getValue()).', columns: '.$this->literal($columns).')]';
             }
             $relations = [];
             foreach ($table->getForeignKeys() as $fk) {
@@ -80,10 +81,10 @@ final class EntityGenerator
                 $qualifier = $target->getQualifier()?->getValue();
                 $foreign = array_map(static fn ($column): string => $column->getIdentifier()->getValue(), $fk->getReferencedColumnNames());
                 if (count($local) !== 1 || $local[0] === $pk || ($qualifier !== null && $qualifier !== $schema) || !isset($classes[$targetName]) || $this->primaryColumns($tables[$targetName]) !== $foreign || isset($relations[$local[0]])) {
-                    $warnings[] = $name.': foreign key '.$fk->getName().' requires manual association mapping; scalar columns retained.';
+                    $warnings[] = $name.': foreign key '.($fk->getObjectName()?->getIdentifier()->getValue() ?? '').' requires manual association mapping; scalar columns retained.';
                     continue;
                 }
-                $relations[$local[0]] = [$classes[$targetName], $foreign[0], $fk->hasOption('onDelete') ? $fk->getOption('onDelete') : null];
+                $relations[$local[0]] = [$classes[$targetName], $foreign[0], $fk->getOnDeleteAction()->value];
             }
             $properties = $used = [];
             foreach ($table->getColumns() as $column) {
@@ -144,7 +145,7 @@ final class EntityGenerator
                     $args[] = 'precision: '.$column->getPrecision();
                     $args[] = 'scale: '.$column->getScale();
                 }
-                $options = $column->getPlatformOptions();
+                $options = array_filter(['charset' => $column->getCharset(), 'collation' => $column->getCollation(), 'min' => $column->getMinimumValue(), 'max' => $column->getMaximumValue(), 'enumType' => $column->getEnumType()], static fn (mixed $value): bool => $value !== null);
                 if ($column->getUnsigned()) {
                     $options['unsigned'] = true;
                 }

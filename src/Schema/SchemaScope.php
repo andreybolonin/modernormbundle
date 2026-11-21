@@ -48,7 +48,8 @@ final class SchemaScope
         }
         $schema = (new SchemaTool($this->manager))->getSchemaFromMetadata($classes);
         foreach ([...$schema->getTables(), ...$schema->getSequences()] as $asset) {
-            $name = $asset->getName();
+            $objectName = $asset->getObjectName();
+            $name = ($objectName->getQualifier() === null ? '' : $objectName->getQualifier()->getValue().'.').$objectName->getUnqualifiedName()->getValue();
             if (!$this->owns($name)) {
                 throw new \LogicException('Mapped schema asset lies outside managed_schema_filter: '.$name);
             }
