@@ -49,6 +49,8 @@ Requires **PHP 8.4+, PostgreSQL and Symfony 7.4 or 8.x**. Add TwigBundle and Web
 composer require 'andreybolonin/modernorm:^0.1.0-beta.5' 'andreybolonin/modernorm-bundle:^0.1.0-beta.6'
 ```
 
+See the [core 1.0 release candidate guide](https://github.com/andreybolonin/modernorm/blob/main/docs/1.0-release-candidate.md) for the planned version pair and beta upgrade steps.
+
 Register the bundle in `config/bundles.php`:
 
 ```php

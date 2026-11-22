@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.0.0-rc.1 (candidate)
+
+- Support core 1.0 candidates while retaining compatibility with core 0.1.0-beta.5.
+- Generate and apply migrations for declarative CHECK constraints, managed row triggers, partial indexes, GiST exclusion constraints and STORED generated columns when paired with the 1.0 core candidate.
+
+
 - Support target-only nullable columns and literal constant defaults in `--schema-rekey`. Plan explicit typed projections, populate staging without inheriting defaults and independently verify constants before commit. Reject executable defaults/generated columns and incompatible values, preserve scalar rules on source-backed fields, and invalidate saved plans when defaults change.
 
 - Support nullable composite FKs between tables in `--schema-rekey`: MATCH SIMPLE NULL handling, matching target FK nullability, exact parent remapping and independent final verification. Preserve original FK components, shared payload rules/journals, and fail on populated orphan keys; cross-table cycles and rekey chains remain blocked.
