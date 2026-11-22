@@ -202,6 +202,31 @@ final class SchemaIntegrationTest extends TestCase
         self::assertSame(0, $this->command(DiffCommand::class)->execute(['--allow-empty-diff' => true], ['interactive' => false]));
         self::assertCount(2, glob($this->directory.'/*.php'));
     }
+    public function testAdvancedSchemaMigratesAndConverges(): void
+    {
+        $exclude = 'ModernORM\Mapping\Exclude';
+        if (!class_exists($exclude)) {
+            self::markTestSkipped('Requires ModernORM advanced PostgreSQL schema support.');
+        }
+        $metadata = $this->manager->getClassMetadata(Lookup::class);
+        $exclusions = new \ReflectionProperty($metadata, 'exclusions');
+        $exclusions->setValue($metadata, [new $exclude('exclude_equal_lengths', ['int4range(id, id + 1) WITH &&'])]);
+        $metadata->mapField([
+            'fieldName' => 'nameLength', 'columnName' => 'name_length', 'type' => 'integer',
+            'storedExpression' => 'length(name)', 'notInsertable' => true, 'notUpdatable' => true,
+        ]);
+        $metadata->table['indexes']['partial_names'] = [
+            'columns' => ['name'], 'unique' => true,
+            'options' => ['where' => 'name_length > 0', 'modernorm_declared_predicate' => true],
+        ];
+        $this->migrateInitial();
+        $db = $this->manager->getConnection();
+        $table = $this->schema.'.mf_lookup';
+        $db->executeStatement("INSERT INTO $table (id, name) VALUES (1, 'alpha')");
+        self::assertSame(5, (int) $db->fetchOne("SELECT name_length FROM $table"));
+        self::assertSame(0, $this->command(DiffCommand::class)->execute(['--allow-empty-diff' => true], ['interactive' => false]));
+        self::assertCount(1, glob($this->directory.'/*.php'));
+    }
     public function testFixtureDependenciesReferencesGeneratedIdsAndL2Invalidation(): void
     {
         $this->migrateInitial();

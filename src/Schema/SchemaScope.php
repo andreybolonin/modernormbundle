@@ -40,7 +40,7 @@ final class SchemaScope
             $metadata->assertSupportedMapping();
             $copy = clone $metadata;
             // This ownership/purge view needs the ordinary mapped tables and sequences.
-            foreach (['fullTextIndexes', 'checks', 'triggers'] as $property) {
+            foreach (['fullTextIndexes', 'checks', 'triggers', 'exclusions'] as $property) {
                 if (array_key_exists($property, get_object_vars($copy))) {
                     (new \ReflectionProperty($copy, $property))->setValue($copy, []);
                 }
@@ -74,7 +74,7 @@ final class SchemaScope
     {
         foreach ($this->manager->getMetadataFactory()->getAllMetadata() as $metadata) {
             $properties = get_object_vars($metadata);
-            if ([] !== ($properties['checks'] ?? []) || [] !== ($properties['triggers'] ?? [])) {
+            if ([] !== ($properties['checks'] ?? []) || [] !== ($properties['triggers'] ?? []) || [] !== ($properties['exclusions'] ?? [])) {
                 return true;
             }
         }
