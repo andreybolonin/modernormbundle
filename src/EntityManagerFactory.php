@@ -14,13 +14,17 @@ use Psr\Cache\CacheItemPoolInterface;
 
 final class EntityManagerFactory implements \Symfony\Contracts\Service\ResetInterface
 {
-    public static function configuration(array $paths, int $batchSize, CacheItemPoolInterface $metadata, CacheItemPoolInterface $query, ?CacheItemPoolInterface $l2, string $namespace, CacheLogger $logger): Configuration
+    public static function configuration(array $paths, int $batchSize, CacheItemPoolInterface $metadata, CacheItemPoolInterface $query, ?CacheItemPoolInterface $l2, string $namespace, CacheLogger $logger, ?string $projectDir = null): Configuration
     {
         $config = new Configuration();
         $config->setMetadataDriverImpl(new AttributeDriver($paths));
         $config->setLazyFetchBatchSize($batchSize);
         $config->setMetadataCache($metadata);
         $config->setQueryCache($query);
+        $reflection = new \ReflectionClass($config);
+        if (null !== $projectDir && $reflection->hasMethod('setTriggerFunctionSqlRoot')) {
+            $reflection->getMethod('setTriggerFunctionSqlRoot')->invoke($config, $projectDir);
+        }
         if ($l2 !== null) {
             $config->setSecondLevelCache($l2, $namespace, $logger);
         }

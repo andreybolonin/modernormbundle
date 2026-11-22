@@ -60,7 +60,7 @@ final class ModernORMExtension extends Extension
             ->addTag('console.command', ['command' => 'modernorm:mapping:import']);
         $container->register('modernorm.event_manager', EventManager::class);
         $container->register('modernorm.configuration', ORMConfiguration::class)->setFactory([EntityManagerFactory::class, 'configuration'])
-            ->setArguments([$config['mapping_paths'], $config['batch_size'], $ref($config['metadata_cache_pool']), $ref($config['query_cache_pool']), $config['l2_cache']['pool'] === null ? null : $ref($config['l2_cache']['pool']), $config['l2_cache']['namespace'], $ref('modernorm.cache_logger_dispatcher')]);
+            ->setArguments([$config['mapping_paths'], $config['batch_size'], $ref($config['metadata_cache_pool']), $ref($config['query_cache_pool']), $config['l2_cache']['pool'] === null ? null : $ref($config['l2_cache']['pool']), $config['l2_cache']['namespace'], $ref('modernorm.cache_logger_dispatcher'), $container->getParameter('kernel.project_dir')]);
         $container->register('modernorm.command.data.transfer', \ModernORM\Bundle\DataTransfer\TransferCommand::class)
             ->setArguments([$ref('modernorm.configuration'), $ref('modernorm.connection')])
             ->addTag('console.command', ['command' => 'modernorm:data:transfer']);

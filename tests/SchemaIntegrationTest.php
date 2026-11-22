@@ -148,6 +148,60 @@ final class SchemaIntegrationTest extends TestCase
             $db->executeStatement('DROP SCHEMA '.$quotedIdentifier);
         }
     }
+    public function testManagedTriggerFunctionUsesTheGeneratedMigrationSnapshot(): void
+    {
+        $configuration = $this->manager->getConfiguration();
+        $triggerClass = 'ModernORM\Mapping\Trigger';
+        if (!class_exists($triggerClass)) {
+            self::markTestSkipped('Requires ModernORM with managed trigger functions.');
+        }
+        (new \ReflectionMethod($configuration, 'setTriggerFunctionSqlRoot'))->invoke($configuration, $this->directory);
+        $metadata = $this->manager->getClassMetadata(Lookup::class);
+        (new \ReflectionProperty($metadata, 'triggers'))->setValue($metadata, [
+            new $triggerClass('trg_lookup', 'BEFORE', ['INSERT'], functionSql: 'fn_lookup.sql'),
+        ]);
+        $source = static fn (string $schema, string $name): string => sprintf(<<<'SQL'
+            CREATE OR REPLACE FUNCTION %1$s.fn_lookup() RETURNS trigger LANGUAGE plpgsql AS $body$
+            BEGIN
+                -- %1$s.migration_versions is part of this source snapshot.
+                NEW.name := '%2$s';
+                RETURN NEW;
+            END;
+            $body$;
+            SQL, $schema, $name);
+        $file = $this->directory.'/fn_lookup.sql';
+        $first = $source($this->schema, 'first');
+        $second = str_replace("\n", "\r\n", $source($this->schema, 'second'));
+        file_put_contents($file, $first);
+
+        $factory = $this->factory();
+        $factory->getMetadataStorage()->ensureInitialized();
+        $generator = $factory->getDiffGenerator();
+        $migration = $generator->generate($this->namespace.'\Version20990101000000', null, true, true);
+        self::assertStringContainsString('CREATE OR REPLACE FUNCTION', file_get_contents($migration));
+        file_put_contents($file, $second);
+        self::assertSame(0, $this->command(MigrateCommand::class, true)->execute([], ['interactive' => false]));
+
+        $db = $this->manager->getConnection();
+        $table = $this->schema.'.mf_lookup';
+        $registry = $this->schema.'.modernorm_trigger_functions';
+        $body = 'SELECT prosrc FROM pg_catalog.pg_proc WHERE oid = pg_catalog.to_regprocedure(?)';
+        $function = $this->schema.'.fn_lookup()';
+        self::assertSame(explode('$body$', $first)[1], $db->fetchOne($body, [$function]));
+        $db->executeStatement("INSERT INTO $table (id, name) VALUES (1, 'ignored')");
+        self::assertSame('first', $db->fetchOne("SELECT name FROM $table WHERE id = 1"));
+        self::assertSame(hash('sha256', $first), $db->fetchOne("SELECT source_hash FROM $registry"));
+
+        $migration = $generator->generate($this->namespace.'\Version20990101000001', null);
+        self::assertStringNotContainsString('CREATE TRIGGER', file_get_contents($migration));
+        self::assertSame(0, $this->command(MigrateCommand::class, true)->execute([], ['interactive' => false]));
+        $db->executeStatement("INSERT INTO $table (id, name) VALUES (2, 'ignored')");
+        self::assertSame('second', $db->fetchOne("SELECT name FROM $table WHERE id = 2"));
+        self::assertSame(hash('sha256', $second), $db->fetchOne("SELECT source_hash FROM $registry"));
+        self::assertSame(explode('$body$', $second)[1], $db->fetchOne($body, [$function]));
+        self::assertSame(0, $this->command(DiffCommand::class)->execute(['--allow-empty-diff' => true], ['interactive' => false]));
+        self::assertCount(2, glob($this->directory.'/*.php'));
+    }
     public function testFixtureDependenciesReferencesGeneratedIdsAndL2Invalidation(): void
     {
         $this->migrateInitial();

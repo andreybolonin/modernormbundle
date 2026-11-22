@@ -15,6 +15,7 @@ use Doctrine\Migrations\Generator\Generator;
 use Doctrine\Migrations\Generator\SqlGenerator;
 use Doctrine\Migrations\Provider\EmptySchemaProvider;
 use ModernORM\Bundle\Schema\SchemaScope;
+use ModernORM\Tools\Trigger\FunctionRegistry;
 
 /** Use the core's complete SQL plan when available; keep the published core's ordinary diff path. */
 final class DiffGenerator extends BaseDiffGenerator
@@ -41,10 +42,34 @@ final class DiffGenerator extends BaseDiffGenerator
         if ([] === $plan['up'] && [] === $plan['down']) {
             throw NoChangesDetected::new();
         }
+        if (class_exists(FunctionRegistry::class) && [FunctionRegistry::irreversibleSql()] === $plan['down']) {
+            // Doctrine's SQL formatter and metadata-table filter must not rewrite or omit function source.
+            $up = $this->preserveSql($plan['up'], $checkDbPlatform);
+            $down = '$this->throwIrreversibleMigrationException('
+                .var_export('Managed trigger function changes require an explicit rollback migration.', true).');';
+
+            return $this->generator->generateMigration($fqcn, $up, $down);
+        }
         $up = $this->sqlGenerator->generate($plan['up'], $formatted, $nowdocOutput, $lineLength, $checkDbPlatform);
         $down = $this->sqlGenerator->generate($plan['down'], $formatted, $nowdocOutput, $lineLength, $checkDbPlatform);
 
         return $this->generator->generateMigration($fqcn, $up, $down);
+    }
+
+    /** @param list<string> $statements */
+    private function preserveSql(array $statements, bool $checkDbPlatform): string
+    {
+        $code = [];
+        if ($checkDbPlatform) {
+            $code[] = '$this->abortIf(!$this->connection->getDatabasePlatform() instanceof \Doctrine\DBAL\Platforms\PostgreSQLPlatform, '
+                .var_export('This migration requires PostgreSQL.', true).');';
+        }
+        foreach ($statements as $statement) {
+            // Generator indents each PHP source line, so encode SQL line breaks in the literal.
+            $code[] = '$this->addSql("'.addcslashes($statement, '\"$'."\r\n").'");';
+        }
+
+        return implode("\n", $code);
     }
 
     private function ordinaryPlan(bool $fromEmptySchema): array

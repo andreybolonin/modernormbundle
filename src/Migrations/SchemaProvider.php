@@ -15,8 +15,8 @@ final class SchemaProvider implements \Doctrine\Migrations\Provider\SchemaProvid
 
     public function createSchema(): Schema
     {
-        if ($this->scope->hasFullText()) {
-            throw new \LogicException('DBAL Schema cannot represent FTS assets; generate complete migrations through modernorm:migrations:diff.');
+        if ($this->scope->hasFullText() || $this->scope->hasPostgreSqlTableObjects()) {
+            throw new \LogicException('DBAL Schema cannot represent full-text indexes, CHECK constraints or triggers; generate complete migrations through modernorm:migrations:diff.');
         }
         return $this->scope->schema();
     }

@@ -39,10 +39,11 @@ final class SchemaScope
         foreach ($this->manager->getMetadataFactory()->getAllMetadata() as $metadata) {
             $metadata->assertSupportedMapping();
             $copy = clone $metadata;
-            // This ownership/purge view needs tables and sequences, not technical FTS assets.
-            // Reflection keeps the published minimum core compatible with the newer metadata shape.
-            if (array_key_exists('fullTextIndexes', get_object_vars($copy))) {
-                (new \ReflectionProperty($copy, 'fullTextIndexes'))->setValue($copy, []);
+            // This ownership/purge view needs the ordinary mapped tables and sequences.
+            foreach (['fullTextIndexes', 'checks', 'triggers'] as $property) {
+                if (array_key_exists($property, get_object_vars($copy))) {
+                    (new \ReflectionProperty($copy, $property))->setValue($copy, []);
+                }
             }
             $classes[] = $copy;
         }
@@ -62,6 +63,18 @@ final class SchemaScope
     {
         foreach ($this->manager->getMetadataFactory()->getAllMetadata() as $metadata) {
             if ([] !== (get_object_vars($metadata)['fullTextIndexes'] ?? [])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function hasPostgreSqlTableObjects(): bool
+    {
+        foreach ($this->manager->getMetadataFactory()->getAllMetadata() as $metadata) {
+            $properties = get_object_vars($metadata);
+            if ([] !== ($properties['checks'] ?? []) || [] !== ($properties['triggers'] ?? [])) {
                 return true;
             }
         }
