@@ -48,3 +48,7 @@ The active pin is `ad789bc`, adding immutable association queries and the Entity
 Core beta.5 is pinned to `15db53058e10fa1fcd3ad7464c7531cb2a131600`. The bundle now requires `^0.1.0-beta.5`; historical results above describe earlier pins, not release evidence for this candidate. The complete compatibility CI must pass for the exact release commit before tagging.
 
 Local candidate verification on PostgreSQL 18.7: PHP 8.4/8.5 each pass the full bundle suite (64 tests / 403 assertions, no skips); focused FTS/Profiler compatibility passes 5 tests / 49 assertions on PHP 8.5. Bundle and pinned-core PHPStan pass. These local results do not replace the exact-candidate CI gate.
+
+## Advanced PostgreSQL schema migrations
+
+The `advanced-schema-core` PHPUnit group requires core `05197a218a443842756dcd1327e01881c7e6b220` or later. CI runs this group against that exact revision across the core compatibility matrix. The published-core and beta.5 candidate suites exclude the group and retain `--fail-on-skipped`.

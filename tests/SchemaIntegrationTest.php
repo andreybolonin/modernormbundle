@@ -24,6 +24,7 @@ use ModernORM\EntityManager;
 use ModernORM\Mapping as ORM;
 use ModernORM\Mapping\Driver\AttributeDriver;
 use ModernORM\Statistics;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -148,6 +149,7 @@ final class SchemaIntegrationTest extends TestCase
             $db->executeStatement('DROP SCHEMA '.$quotedIdentifier);
         }
     }
+    #[Group('advanced-schema-core')]
     public function testManagedTriggerFunctionUsesTheGeneratedMigrationSnapshot(): void
     {
         $configuration = $this->manager->getConfiguration();
@@ -202,6 +204,7 @@ final class SchemaIntegrationTest extends TestCase
         self::assertSame(0, $this->command(DiffCommand::class)->execute(['--allow-empty-diff' => true], ['interactive' => false]));
         self::assertCount(2, glob($this->directory.'/*.php'));
     }
+    #[Group('advanced-schema-core')]
     public function testAdvancedSchemaMigratesAndConverges(): void
     {
         $exclude = 'ModernORM\Mapping\Exclude';

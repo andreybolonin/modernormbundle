@@ -106,7 +106,7 @@ jobs:
         run: composer check-platform-reqs
 
       - name: Unit, PostgreSQL and MySQL import integration tests
-        run: composer test -- --fail-on-skipped
+        run: composer test -- --fail-on-skipped --exclude-group advanced-schema-core
 
       - name: Migrations and fixtures from an empty schema
         run: php examples/migrations-fixtures/run.php
@@ -180,7 +180,7 @@ jobs:
           coverage: none
       - run: composer install --no-interaction --prefer-dist --no-progress
       - name: Bundle suite against the pinned core
-        run: php vendor/bin/phpunit --bootstrap tools/core-compatibility/bootstrap.php --fail-on-skipped
+        run: php vendor/bin/phpunit --bootstrap tools/core-compatibility/bootstrap.php --fail-on-skipped --exclude-group advanced-schema-core
       - name: FTS migrations and saved Profiler compatibility
         run: php vendor/bin/phpunit --bootstrap tools/core-compatibility/bootstrap.php tools/core-compatibility/tests --fail-on-skipped
       - name: SDK and OTLP adapter compatibility
@@ -189,3 +189,14 @@ jobs:
           php vendor/bin/phpunit --bootstrap examples/observability/bootstrap.php examples/observability/tests tools/core-compatibility/otel --fail-on-skipped
       - name: Static analysis against pinned core
         run: composer analyse:core
+      - name: Checkout advanced PostgreSQL schema core
+        uses: actions/checkout@v4
+        with:
+          repository: andreybolonin/modernorm
+          ref: 05197a218a443842756dcd1327e01881c7e6b220
+          path: modernorm-schema-core
+          persist-credentials: false
+      - name: Trigger and advanced schema migrations
+        env:
+          MODERNORM_CORE_PATH: ${{ github.workspace }}/modernorm-schema-core
+        run: php vendor/bin/phpunit --bootstrap tools/core-compatibility/bootstrap.php --fail-on-skipped --group advanced-schema-core
