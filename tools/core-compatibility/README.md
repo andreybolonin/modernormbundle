@@ -51,4 +51,4 @@ Local candidate verification on PostgreSQL 18.7: PHP 8.4/8.5 each pass the full 
 
 ## Advanced PostgreSQL schema migrations
 
-The `advanced-schema-core` PHPUnit group requires core `4ad63efeff91913d35cc5690ce9074e44afe3087` or later. CI runs this group against candidate core `910c9c0da927c40b375054df96577d5a4790ba57` across the core compatibility matrix, then repeats the schema integration suite on Doctrine Migrations 3.9.1. The published-core and beta.5 candidate suites exclude the group and retain `--fail-on-skipped`.
+The `advanced-schema-core` PHPUnit group requires core `4ad63efeff91913d35cc5690ce9074e44afe3087` or later. CI runs this group against candidate core `d1b183d0e040242f87b69318d7b36a604daff479` across the core compatibility matrix, then repeats the schema integration suite on Doctrine Migrations 3.9.1. The published-core and beta.5 candidate suites exclude the group and retain `--fail-on-skipped`.
