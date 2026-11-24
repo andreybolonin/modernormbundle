@@ -214,17 +214,15 @@ final class SchemaIntegrationTest extends TestCase
         $metadata = $this->manager->getClassMetadata(Lookup::class);
         $exclusions = new \ReflectionProperty($metadata, 'exclusions');
         $exclusions->setValue($metadata, [new $exclude('exclude_equal_lengths', ['int4range(id, id + 1) WITH &&'])]);
-        $metadata->mapField([
-            'fieldName' => 'nameLength', 'columnName' => 'name_length', 'type' => 'integer',
-            'storedExpression' => 'length(name)', 'notInsertable' => true, 'notUpdatable' => true,
-        ]);
-        $metadata->table['indexes']['partial_names'] = [
-            'columns' => ['name'], 'unique' => true,
-            'options' => ['where' => 'name_length > 0', 'modernorm_declared_predicate' => true],
-        ];
         $this->migrateInitial();
         $db = $this->manager->getConnection();
         $table = $this->schema.'.mf_lookup';
+        self::assertSame('x', $db->fetchOne(
+            "SELECT contype FROM pg_catalog.pg_constraint WHERE conrelid = pg_catalog.to_regclass(?) AND conname = ?",
+            [$table, 'exclude_equal_lengths'],
+        ));
+        $db->executeStatement("ALTER TABLE $table ADD COLUMN name_length integer GENERATED ALWAYS AS (length(name)) STORED");
+        $db->executeStatement("CREATE UNIQUE INDEX partial_names ON $table (name) WHERE name_length > 0");
         $db->executeStatement("INSERT INTO $table (id, name) VALUES (1, 'alpha')");
         self::assertSame(5, (int) $db->fetchOne("SELECT name_length FROM $table"));
         self::assertSame(0, $this->command(DiffCommand::class)->execute(['--allow-empty-diff' => true], ['interactive' => false]));
