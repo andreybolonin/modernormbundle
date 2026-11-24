@@ -203,7 +203,10 @@ jobs:
       - name: Migrations with the minimum supported Doctrine Migrations version
         env:
           MODERNORM_CORE_PATH: ${{ github.workspace }}/modernorm-schema-core
+          SYMFONY_VERSION: '7.4'
         run: |
-          composer update doctrine/migrations:3.9.1 --with-dependencies --no-interaction --prefer-dist --no-progress
+          php tools/ci/select-symfony.php
+          composer update 'symfony/*' doctrine/migrations:3.9.1 --with-all-dependencies --no-interaction --prefer-dist --no-progress
+          php -r 'require "vendor/autoload.php"; exit(Composer\InstalledVersions::getVersion("doctrine/migrations") === "3.9.1.0" ? 0 : 1);'
           php -d auto_prepend_file=tools/core-compatibility/bootstrap.php examples/migrations-fixtures/run.php
           php vendor/bin/phpunit --bootstrap tools/core-compatibility/bootstrap.php --fail-on-skipped tests/SchemaIntegrationTest.php
