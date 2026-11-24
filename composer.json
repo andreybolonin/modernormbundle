@@ -15,7 +15,7 @@
     },
     "require-dev": {
         "doctrine/data-fixtures": "^2.2",
-        "doctrine/migrations": "^3.9",
+        "doctrine/migrations": "^3.9.1",
         "friendsofphp/php-cs-fixer": "^3.90",
         "open-telemetry/api": "^1.11",
         "phpstan/phpstan": "^2.1",
@@ -27,7 +27,7 @@
     "suggest": {
         "symfony/web-profiler-bundle": "Displays ModernORM metrics in the Symfony toolbar and Profiler.",
         "symfony/twig-bundle": "Renders the ModernORM Profiler panel.",
-        "doctrine/migrations": "Enables optional ModernORM migration commands.",
+        "doctrine/migrations": "^3.9.1 enables optional ModernORM migration commands.",
         "doctrine/data-fixtures": "Enables optional fixture loading.",
         "open-telemetry/api": "Records ModernORM operation metrics with the optional OpenTelemetry adapter; configure a MeterProvider in your application."
     },
@@ -59,7 +59,7 @@
         ]
     },
     "conflict": {
-        "doctrine/migrations": "<3.9 || >=4.0",
+        "doctrine/migrations": "<3.9.1 || >=4.0",
         "doctrine/data-fixtures": "<2.2 || >=3.0"
     },
     "homepage": "https://github.com/andreybolonin/modernormbundle",

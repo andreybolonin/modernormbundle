@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Require Doctrine Migrations 3.9.1 or newer in the 3.x series for the optional migration commands.
+
 ## 1.0.0-rc.1 (candidate)
 
 - Support core 1.0 candidates while retaining compatibility with core 0.1.0-beta.5.

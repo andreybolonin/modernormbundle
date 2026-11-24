@@ -193,10 +193,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: andreybolonin/modernorm
-          ref: 4ad63efeff91913d35cc5690ce9074e44afe3087
+          ref: 910c9c0da927c40b375054df96577d5a4790ba57
           path: modernorm-schema-core
           persist-credentials: false
       - name: Trigger and advanced schema migrations
         env:
           MODERNORM_CORE_PATH: ${{ github.workspace }}/modernorm-schema-core
         run: php vendor/bin/phpunit --bootstrap tools/core-compatibility/bootstrap.php --fail-on-skipped --group advanced-schema-core
+      - name: Migrations with the minimum supported Doctrine Migrations version
+        env:
+          MODERNORM_CORE_PATH: ${{ github.workspace }}/modernorm-schema-core
+        run: |
+          composer update doctrine/migrations:3.9.1 --with-dependencies --no-interaction --prefer-dist --no-progress
+          php -d auto_prepend_file=tools/core-compatibility/bootstrap.php examples/migrations-fixtures/run.php
+          php vendor/bin/phpunit --bootstrap tools/core-compatibility/bootstrap.php --fail-on-skipped tests/SchemaIntegrationTest.php

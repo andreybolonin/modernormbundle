@@ -2,7 +2,7 @@
 
 [Documentation](README.md) · [Fixtures](fixtures.md) · [Runnable migration/fixture example](../examples/migrations-fixtures/README.md)
 
-Install `doctrine/migrations:^3.9` in the application. ModernORMBundle integrates the existing engine directly through DBAL; neither Doctrine ORM nor DoctrineMigrationsBundle is required.
+Install `doctrine/migrations:^3.9.1` in the application. ModernORMBundle integrates the existing engine directly through DBAL; neither Doctrine ORM nor DoctrineMigrationsBundle is required.
 
 ```yaml
 modernorm:
